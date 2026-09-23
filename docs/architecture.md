@@ -1,6 +1,6 @@
 # 아키텍처
 
-> 목표 아키텍처다. 이번 초기 커밋에는 앱과 CI만 포함되며 AWS 리소스와 Terraform 코드는 후속 PR에서 구현한다.
+> 아래 앱 서비스 구조는 목표 아키텍처다. 현재 구현된 Terraform은 state 버킷·OIDC·비용 Budget의 bootstrap과 환경별 PR plan까지만 포함한다. AWS에는 아직 적용하지 않았다.
 
 ```mermaid
 flowchart LR
@@ -46,4 +46,4 @@ flowchart LR
 
 ## 보안과 한계
 
-구현 시 S3 버킷의 공개 접근을 막고 암호화·버전 관리를 사용한다. EC2 메타데이터는 IMDSv2로 제한한다. OIDC 역할은 GitHub repository subject와 환경 이름으로 신뢰 범위를 제한한다. plan 역할은 읽기와 state lock에 필요한 권한, apply 역할은 필요한 리소스 변경 권한만 부여하도록 설계한다. GitHub 환경 승인과 branch protection을 배포 통제에 포함한다.
+bootstrap 구성은 S3 공개 접근 차단, HTTPS 강제, SSE-S3 암호화, 버전 관리를 설정한다. OIDC plan 역할은 이 저장소의 immutable subject와 `preprod-plan`·`prod-plan` 환경 이름만 신뢰한다. state 객체 읽기와 잠금 파일에 필요한 권한만 부여하고 state 객체 쓰기 권한은 주지 않는다. GitHub plan 환경에는 승인 규칙을 설정한 뒤 역할 ARN을 등록해야 한다. EC2와 apply 역할은 후속 서비스 PR에서 설계한다.

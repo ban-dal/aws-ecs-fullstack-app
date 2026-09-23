@@ -1,39 +1,57 @@
 # 운영 가이드
 
-> 이 문서는 후속 Terraform 구현을 위한 운영 계획이다. 현재 AWS 계정 연결, 배포 워크플로, 실제 리소스는 없다. 아래 명령은 Terraform 구현 후에 사용할 수 있다.
+Terraform bootstrap과 PR plan 코드가 준비되었다. 현재 AWS에는 적용하지 않았다. 아래 단계에서 AWS 리소스를 실제 생성하는 명령은 운영자가 계정과 비용을 확인한 후 실행한다.
 
 ## 선행 준비
 
-Node.js 22+, pnpm 11.27.0, Terraform 1.14+, AWS CLI, Docker와 권한 있는 AWS 계정이 필요하다. AWS 계정에 새 Free plan 혜택이 적용되는지 Billing에서 확인한다. Route 53 hosted zone은 이 Terraform이 생성하지 않는다. 도메인 등록과 NS 위임을 먼저 완료한다.
+로컬 검증에는 Terraform 1.14+가 필요하다. AWS 적용에는 S3·IAM·Budgets 변경 권한이 있는 AWS 자격 증명과 전역에서 유일한 버킷 이름이 필요하다. AWS 계정의 Free plan 기간과 크레딧을 Billing에서 확인한다. 도메인·Route 53은 이번 작업에 필요하지 않다.
 
 ## 1. Bootstrap
 
-후속 PR에서 `infra/bootstrap`을 만든 뒤 변수 예제를 개인 `.tfvars`로 복사한다. state S3 버킷에는 전역 유일한 이름을 넣는다. GitHub OIDC subject는 실제 토큰 값을 확인한다. GitHub 2026년 7월 이후 생성 저장소는 `repo:owner@OWNER_ID/repo@REPO_ID` 같은 immutable subject를 사용할 수 있다.
+`infra/bootstrap/terraform.tfvars.example`을 `infra/bootstrap/terraform.tfvars`로 복사한다. 버킷 이름과 알림 이메일을 입력한다. 이 저장소의 GitHub OIDC 기본 subject는 `repo:ban-dal@46153202/aws-ecs-fullstack-app@1382568125`로 확인했다. 저장소가 이전·재생성되면 GitHub 설정을 다시 확인한다. 이메일이 `null`이면 Budget이 생성되지 않는다. 비용 Budget은 크레딧을 제외한 사용 비용을 기준으로 월간 80% 실제 사용과 100% 예상 사용을 알린다.
 
-Bootstrap state의 저장·복구 경로를 구현 PR에서 정해야 한다. state와 비밀 값은 커밋하지 않는다. 같은 AWS 계정에 GitHub OIDC provider가 이미 있으면 새로 만들기 전 Terraform import로 관리 대상을 맞춘다.
+```bash
+terraform -chdir=infra/bootstrap init
+terraform -chdir=infra/bootstrap fmt -check
+terraform -chdir=infra/bootstrap validate
+terraform -chdir=infra/bootstrap plan -var-file=terraform.tfvars
+terraform -chdir=infra/bootstrap apply -var-file=terraform.tfvars
+```
+
+첫 apply는 로컬 state를 만든다. 이후 `infra/bootstrap/backend.s3.tf.example`을 `backend.s3.tf`로 복사하고, 같은 버킷의 `bootstrap/terraform.tfstate`로 이전한다. 이전과 S3 버전 확인이 끝날 때까지 로컬 state를 안전하게 보관한다. `backend.s3.tf`와 `.tfvars`는 Git에서 제외한다.
+
+```bash
+cp infra/bootstrap/backend.s3.tf.example infra/bootstrap/backend.s3.tf
+terraform -chdir=infra/bootstrap init -migrate-state \
+  -backend-config="bucket=<state-bucket>" \
+  -backend-config="key=bootstrap/terraform.tfstate" \
+  -backend-config="region=ap-northeast-2"
+terraform -chdir=infra/bootstrap output
+```
+
+계정에 `token.actions.githubusercontent.com` OIDC provider가 이미 있으면 중복 생성 전에 해당 리소스를 import한다. bootstrap state 버킷은 `force_destroy=false`이므로 실수로 state 전체를 지우는 동작을 막는다.
 
 ## 2. GitHub 설정
 
-예정 변수: `TF_STATE_BUCKET`, `AWS_PLAN_ROLE_ARN`, `AWS_APPLY_ROLE_ARN`, `AWS_REGION`, `HOSTED_ZONE_ID`, `PREPROD_DOMAIN_NAME`, `PROD_DOMAIN_NAME`, `ENABLE_PUBLIC_APP`. 공개 서비스는 초기 `false`로 둔다. hosted zone과 ACM 인증서의 도메인·리전이 맞아야 한다.
+GitHub 환경 `preprod-plan`, `prod-plan`을 만들고 승인 규칙을 설정한다. 저장소 변수 `TF_STATE_BUCKET`, `AWS_PLAN_ROLE_ARN`, `AWS_ACCOUNT_ID`에는 bootstrap output 값을, `AWS_REGION`에는 버킷 리전을 넣는다. 앞의 세 변수 중 하나라도 없으면 PR의 AWS plan 작업은 건너뛴다. fork PR도 AWS 자격 증명을 받지 않는다. 이 저장소에서 온 PR은 환경 승인 후에만 plan 역할을 사용하도록 환경 보호를 설정한다. plan은 호출한 AWS 계정 ID가 bootstrap 계정과 같은지도 확인한다.
 
-Terraform 배포를 구현할 때 GitHub 환경 `preprod-plan`, `prod-plan`, `preprod`, `prod`를 생성한다. 배포 환경에는 `main` branch 제한을 두고 `prod`에는 필수 승인자를 설정한다. GitHub Actions OIDC 신뢰 정책과 환경 보호는 한 쌍이다.
+현재 OIDC 역할은 환경별 `preprod/terraform.tfstate`, `prod/terraform.tfstate` 읽기와 잠금 파일 작업에만 접근한다. GitHub Actions는 장기 AWS 키를 저장하지 않는다. 향후 서비스 리소스를 추가할 때 provider의 필요한 읽기 권한을 검토해 role policy를 늘린다.
 
 ## 3. 배포와 확인
 
-현재 PR과 main에서는 앱 타입 검사와 빌드만 실행한다. 목표 흐름은 PR에서 Terraform fmt·validate·두 환경 plan → 리뷰·merge → preprod apply → 수동 승인 후 prod apply다.
+현재 PR은 앱 타입 검사·빌드와 Terraform fmt·validate를 실행한다. bootstrap을 적용하고 GitHub 변수를 등록하면 같은 저장소의 PR에 `preprod`·`prod` 원격 state plan이 추가된다. `infra/plan`은 계정 식별만 읽으며 AWS 리소스를 생성하지 않는다. PR 리뷰·merge 후의 apply는 후속 서비스 작업에서 만든다.
 
-배포 후 도메인과 `/api/health`, ECS 서비스 이벤트, CloudWatch 로그, ALB target health, ACM 검증 CNAME을 확인한다.
+향후 앱 배포 후에는 도메인과 `/api/health`, ECS 서비스 이벤트, CloudWatch 로그, ALB target health, ACM 검증 CNAME을 확인한다.
 
 ## 비용 관리
 
-2026년 9월 기준 새 AWS Free plan은 최대 6개월 또는 크레딧 소진 시 끝난다. 무료 플랜 대상 서비스와 혜택은 계정 생성 시점에 따라 다르다. ALB 시간·LCU, Route 53 hosted zone과 도메인, 퍼블릭 IPv4, EC2/EBS, S3, ECR·로그 저장량은 요금 또는 크레딧을 사용할 수 있다. 두 환경에서 공개 앱을 켜면 EC2와 ALB도 각각 생성된다. 계획에는 NAT Gateway를 넣지 않는다. Billing에서 예산·알림을 설정하고 배포 전 AWS Pricing Calculator로 리전별 비용을 계산한다. 리소스 종료 절차는 Terraform 구현과 함께 확정한다.
+2026년 9월 기준 새 AWS Free plan은 최대 6개월 또는 크레딧 소진 시 끝난다. 이번 bootstrap의 S3 저장량·요청에는 요금 또는 크레딧 사용이 생길 수 있다. 알림만 있는 AWS Budget은 무료지만 예산 알림은 지출을 자동 중단하지 않는다. Billing의 Free Tier 85% 알림과 크레딧 잔여량을 함께 확인한다. 후속 ALB·Route 53·EC2 등은 리전별 비용을 별도 계산하고 공개 앱은 기본적으로 끈다. NAT Gateway는 계획에 넣지 않는다.
 
 ## 롤백과 복구
 
-- 앱 롤백: 이전 정상 이미지 digest로 `image_uri`를 지정해 해당 환경 Terraform apply를 실행한다. 파이프라인 재실행은 최신 커밋 이미지를 다시 만들므로 이전 코드 롤백에는 revert PR을 권장한다.
 - Terraform 오류: 마지막 성공 state와 S3 version을 확인하고, 임의로 state를 편집하지 않는다. `terraform plan`으로 실제 리소스와 선언 차이를 확인한다.
-- 인증서 대기: Route 53 NS 위임과 ACM DNS 검증 레코드가 전파되었는지 확인한다.
-- 서비스 비정상: ECS 이벤트, EC2 등록 상태, 로그 그룹, target group의 `/api/health`를 확인한다.
+- bootstrap 재구성: 버킷 삭제 전에 `bootstrap`, `preprod`, `prod` state를 백업한다. OIDC 역할이 사용 중인지 확인하고, state 이전 없이 버킷을 없애지 않는다.
+- 앱 롤백·인증서·ECS 장애 절차는 해당 리소스를 구현할 때 추가한다.
 
 ## 외부 참고
 
@@ -42,3 +60,5 @@ Terraform 배포를 구현할 때 GitHub 환경 `preprod-plan`, `prod-plan`, `pr
 - [ALB 요금](https://aws.amazon.com/elasticloadbalancing/pricing/)
 - [NAT Gateway 요금](https://docs.aws.amazon.com/vpc/latest/userguide/nat-gateway-pricing.html)
 - [GitHub OIDC와 AWS](https://docs.github.com/en/actions/how-tos/secure-your-work/security-harden-deployments/oidc-in-aws)
+- [Terraform S3 backend](https://developer.hashicorp.com/terraform/language/backend/s3)
+- [AWS Budgets 요금](https://aws.amazon.com/aws-cost-management/aws-budgets/pricing/)

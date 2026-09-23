@@ -1,0 +1,5 @@
+aws_region                = "ap-northeast-2"
+state_bucket_name         = "REPLACE-WITH-GLOBALLY-UNIQUE-BUCKET"
+github_repository_subject = "repo:ban-dal@46153202/aws-ecs-fullstack-app@1382568125"
+budget_alert_email        = "you@example.com"
+monthly_budget_usd        = 5
