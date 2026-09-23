@@ -4,9 +4,9 @@
 | --- | --- |
 | PR | [#2 · GitHub PR plan 환경 구성](https://github.com/ban-dal/aws-ecs-fullstack-app/pull/2) |
 | 작업 브랜치 | `feat/github-pr-plan-setup` |
-| 상태 | 진행 중: 환경·변수·PR plan 검증 완료, PR merge 대기 |
+| 상태 | 완료: PR merge |
 | 시작일 | 2026-09-23 |
-| 완료일·merge commit | PR merge 후 기록 |
+| 완료일·merge commit | 2026-09-23 · `6f680eb45d1baa578776bdd1eb620700298dee3f` |
 
 ## 목표와 완료 기준
 
@@ -52,4 +52,4 @@ GitHub의 **배포 환경 승인**은 PR Approve와 별개다. 1인 운영을 �
 
 ## 남은 사항과 다음 Task
 
-다음 Task 후보는 VPC·서브넷·보안 그룹·ECR·ECS/EC2 등 서비스 인프라를 비용과 종료 절차까지 포함해 설계·구현하는 작업이다.
+[Task 003](003-service-foundation.md)에서 VPC·서브넷·보안 그룹·ECR 기반을 분리해 선언한다. ECS/EC2와 공개 앱 경로는 비용과 배포 순서를 검토한 뒤 후속 Task로 진행한다.

@@ -65,13 +65,37 @@ GitHub 환경 `preprod-plan`, `prod-plan`을 만들고 승인 규칙을 설정�
 
 2026-09-23에 `preprod-plan`·`prod-plan` 환경에 `ban-dal` 필수 수동 승인자를 설정하고 자기 환경 승인(`prevent_self_review=false`)을 허용했다. 이후 bootstrap output과 대조한 네 저장소 변수를 등록하고 읽어 확인했다. [PR #2 실행](https://github.com/ban-dal/aws-ecs-fullstack-app/actions/runs/35823513637)에서 두 환경 작업을 각각 승인했고, OIDC 인증·S3 backend 초기화·예상 계정 확인·plan 성공을 확인했다. 두 plan은 `plan_identity` 출력값 추가만 표시했으며 실제 인프라 변경은 없었다.
 
-현재 OIDC 역할은 환경별 `preprod/terraform.tfstate`, `prod/terraform.tfstate` 읽기와 잠금 파일 작업에만 접근한다. GitHub Actions는 장기 AWS 키를 저장하지 않는다. 향후 서비스 리소스를 추가할 때 provider의 필요한 읽기 권한을 검토해 role policy를 늘린다.
+현재 AWS에 적용된 OIDC 역할은 환경별 `preprod/terraform.tfstate`, `prod/terraform.tfstate` 읽기와 잠금 파일 작업에만 접근한다. GitHub Actions는 장기 AWS 키를 저장하지 않는다. Task 003에서 서비스 기반 리소스 refresh용 VPC·ECR 읽기 정책을 코드에 추가했다. bootstrap을 승인된 경로로 적용하기 전에는 실제 역할 권한이 바뀌지 않는다.
 
 ## 3. 배포와 확인
 
-현재 PR은 앱 타입 검사·빌드와 Terraform fmt·validate를 실행한다. bootstrap을 적용하고 GitHub 변수를 등록하면 같은 저장소의 PR에 `preprod`·`prod` 원격 state plan이 추가된다. `infra/plan`은 계정 식별만 읽으며 AWS 리소스를 생성하지 않는다. PR 리뷰·merge 후의 apply는 후속 서비스 작업에서 만든다.
+현재 PR은 앱 타입 검사·빌드와 Terraform fmt·validate를 실행한다. 같은 저장소 PR에서는 `preprod`·`prod` 원격 state plan을 실행한다. Task 003의 `infra/plan`은 계정 식별 후 `infra/live` 서비스 기반 모듈을 plan한다. `terraform plan`은 AWS 리소스를 만들지 않는다. PR 리뷰·merge 후의 apply는 후속 Task에서 보호된 워크플로로 만든다.
 
 향후 앱 배포 후에는 도메인과 `/api/health`, ECS 서비스 이벤트, CloudWatch 로그, ALB target health, ACM 검증 CNAME을 확인한다.
+
+## 4. 서비스 기반 네트워크와 ECR
+
+[Task 003](tasks/003-service-foundation.md)은 각 환경에 VPC, 두 AZ의 공개·비공개 서브넷, Internet Gateway와 공개 라우트, ALB·ECS 호스트 보안 그룹, 비공개 ECR을 선언한다. NAT, EC2, ALB, 퍼블릭 IPv4는 포함하지 않는다. `preprod`와 `prod`의 state key는 기존 `preprod/terraform.tfstate`, `prod/terraform.tfstate`를 그대로 쓴다.
+
+AWS 콘솔 또는 `aws ec2 describe-availability-zones --region ap-northeast-2`로 두 AZ가 계정에 사용 가능한지 확인한다. 기본값은 `ap-northeast-2a`와 `ap-northeast-2c`다. 다른 AZ를 써야 하면 두 환경의 plan에서 `availability_zones` 입력을 같은 순서로 지정한다. 적용 후 AZ 순서를 바꾸면 서브넷 교체가 발생할 수 있다.
+
+PR #3의 환경별 plan에서 VPC CIDR, 서브넷 CIDR, 환경별 이름과 생성 수를 확인한다. 로컬에서 plan할 때는 `infra/bootstrap`의 원격 state를 먼저 초기화하고 아래처럼 **환경을 바꿀 때마다 `-reconfigure`**를 사용한다. 이는 두 환경 state를 하나로 이전하지 않기 위한 설정이다.
+
+```bash
+export TF_STATE_BUCKET="$(terraform -chdir=infra/bootstrap output -raw state_bucket)"
+export TF_VAR_expected_account_id="$(terraform -chdir=infra/bootstrap output -raw aws_account_id)"
+terraform -chdir=infra/plan init -reconfigure -input=false \
+  -backend-config="bucket=$TF_STATE_BUCKET" \
+  -backend-config="key=preprod/terraform.tfstate" \
+  -backend-config="region=ap-northeast-2"
+terraform -chdir=infra/plan plan -input=false -var="environment=preprod"
+```
+
+이번 Task는 코드와 PR plan까지만 진행한다. 첫 실제 적용 전에는 plan 역할의 VPC·ECR 읽기 정책을 포함한 `infra/bootstrap` 변경을 승인된 경로로 적용하고, 보호된 `preprod` apply를 실행한다. `prod`는 preprod 결과를 확인한 뒤 별도 환경 승인으로 적용한다. 이 저장소에는 아직 apply 워크플로와 실행 역할이 없으므로 현재 GitHub PR CI에서 apply하지 않는다.
+
+VPC와 Internet Gateway 자체에는 추가 요금이 없지만, ECR에 이미지를 넣으면 저장량·데이터 전송량에 따라 비용이 생긴다. 새 고객의 ECR 프라이빗 저장소에는 월 500 MB 저장 공간의 무료 이용 범위가 안내되어 있으나 실제 계정 자격과 초과 사용량을 확인해야 한다. 퍼블릭 IPv4는 생성하지 않았으며 나중에 할당하면 시간당 요금이 발생한다. [VPC FAQ](https://aws.amazon.com/vpc/faqs/), [Internet Gateway 안내](https://docs.aws.amazon.com/vpc/latest/userguide/VPC_Internet_Gateway.html), [ECR 요금](https://aws.amazon.com/ecr/pricing/), [VPC 요금](https://aws.amazon.com/vpc/pricing/)을 참고한다.
+
+종료할 때는 후속 ECS·ALB 등 종속 리소스를 먼저 제거한다. ECR 저장소는 `force_delete=false`이므로 이미지를 비운 뒤 삭제한다. 환경별 state로 `terraform plan -destroy`를 검토하고 승인된 destroy 절차로 제거한다. bootstrap의 state 버킷과 OIDC 역할은 별도로 유지한다.
 
 ## 비용 관리
 

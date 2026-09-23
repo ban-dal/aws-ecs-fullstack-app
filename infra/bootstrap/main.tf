@@ -129,6 +129,33 @@ resource "aws_iam_role_policy" "state_plan" {
   policy = data.aws_iam_policy_document.state_plan.json
 }
 
+data "aws_iam_policy_document" "foundation_plan_read" {
+  statement {
+    sid       = "ReadVpcFoundation"
+    actions   = ["ec2:DescribeVpcs", "ec2:DescribeSubnets", "ec2:DescribeInternetGateways", "ec2:DescribeRouteTables", "ec2:DescribeSecurityGroups", "ec2:DescribeSecurityGroupRules"]
+    resources = ["*"]
+  }
+
+  statement {
+    sid = "ReadEnvironmentRepositories"
+    actions = [
+      "ecr:DescribeRepositories",
+      "ecr:GetLifecyclePolicy",
+      "ecr:ListTagsForResource",
+    ]
+    resources = [
+      for environment in ["preprod", "prod"] :
+      "arn:aws:ecr:${var.aws_region}:${data.aws_caller_identity.current.account_id}:repository/aws-fullstack-lab-${environment}-web"
+    ]
+  }
+}
+
+resource "aws_iam_role_policy" "foundation_plan_read" {
+  name   = "terraform-foundation-read"
+  role   = aws_iam_role.plan.name
+  policy = data.aws_iam_policy_document.foundation_plan_read.json
+}
+
 resource "aws_budgets_budget" "monthly" {
   count        = var.budget_alert_email == null ? 0 : 1
   name         = "aws-fullstack-lab-monthly"
