@@ -4,9 +4,9 @@
 | --- | --- |
 | PR | [#5 · bootstrap IAM 및 preprod 기반 적용 기록](https://github.com/ban-dal/aws-ecs-fullstack-app/pull/5) |
 | 작업 브랜치 | `feat/preprod-foundation-apply` |
-| 상태 | 진행 중: IAM·preprod 적용과 사후 검증 완료, PR 검토 대기 |
+| 상태 | 완료: PR merge |
 | 시작일 | 2026-09-23 |
-| 완료일·merge commit | PR merge 후 기록 |
+| 완료일·merge commit | 2026-09-23 · `2448678ff184664bbe1c9ca64c02bdc671431719` |
 
 ## 목표와 완료 기준
 

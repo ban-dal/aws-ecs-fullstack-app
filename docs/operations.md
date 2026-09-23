@@ -6,7 +6,7 @@ Terraform bootstrap은 2026-09-23에 적용했고 state를 S3로 이전했다. G
 
 로컬 검증에는 Terraform 1.14+가 필요하다. AWS 적용에는 S3·IAM·Budgets 변경 권한이 있는 AWS 자격 증명과 전역에서 유일한 버킷 이름이 필요하다. AWS 계정의 Free plan 기간과 크레딧을 Billing에서 확인한다. 도메인·Route 53은 이번 작업에 필요하지 않다.
 
-### 로컬 CLI 인증
+### 최초 bootstrap용 로컬 CLI 인증
 
 Terraform과 AWS CLI v2를 설치한 뒤 프로젝트 전용 프로필의 리전을 설정한다. IAM 사용자 또는 콘솔 로그인 계정은 `aws login`으로 임시 자격 증명을 받는다. IAM Identity Center 사용자라면 `aws configure sso`와 `aws sso login`을 사용한다. 액세스 키와 비밀 키는 저장소나 대화에 기록하지 않는다.
 
@@ -22,7 +22,7 @@ export AWS_PROFILE=aws-fullstack-terraform
 aws sts get-caller-identity
 ```
 
-SSO를 쓰는 계정에서는 `aws login` 대신 `aws configure sso --profile aws-fullstack-bootstrap`과 `aws sso login --profile aws-fullstack-bootstrap`을 실행한다. Terraform의 S3 backend가 `aws login` 프로필을 직접 읽지 못하는 경우 `credential_process` 프로필로 AWS CLI의 임시 자격 증명을 공유한다. `AWS_PROFILE`은 Terraform 명령을 실행하는 셸에 설정해야 하며 Codex 데스크톱 앱은 별도 실행 환경이므로 터미널의 `export`를 자동으로 상속하지 않는다. Codex 샌드박스에서 로그인 캐시 접근이 차단되면 AWS 명령에 샌드박스 밖 실행 권한이 필요하다. 인증 파일을 저장소로 복사하지 않는다. 세션이 만료되면 `aws login --profile aws-fullstack-bootstrap`을 다시 실행한다. [AWS CLI 로그인 안내](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sign-in.html)와 [S3 backend 인증](https://developer.hashicorp.com/terraform/language/backend/s3)을 참고한다.
+이 절은 최초 bootstrap에 사용한 기존 프로필을 재구성하기 위한 기록이다. Task 006 적용과 MFA 검증 후에는 [6절](#6-비루트-운영-주체)의 비루트 프로필을 사용한다. SSO를 쓰는 계정에서는 `aws login` 대신 `aws configure sso --profile aws-fullstack-bootstrap`과 `aws sso login --profile aws-fullstack-bootstrap`을 실행한다. Terraform의 S3 backend가 `aws login` 프로필을 직접 읽지 못하는 경우 `credential_process` 프로필로 AWS CLI의 임시 자격 증명을 공유한다. `AWS_PROFILE`은 Terraform 명령을 실행하는 셸에 설정해야 하며 Codex 데스크톱 앱은 별도 실행 환경이므로 터미널의 `export`를 자동으로 상속하지 않는다. Codex 샌드박스에서 로그인 캐시 접근이 차단되면 AWS 명령에 샌드박스 밖 실행 권한이 필요하다. 인증 파일을 저장소로 복사하지 않는다. 세션이 만료되면 `aws login --profile aws-fullstack-bootstrap`을 다시 실행한다. [AWS CLI 로그인 안내](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sign-in.html)와 [S3 backend 인증](https://developer.hashicorp.com/terraform/language/backend/s3)을 참고한다.
 
 ## 1. Bootstrap
 
@@ -153,6 +153,49 @@ bootstrap 적용 후 `foundation_apply_role_arns`의 `preprod`·`prod` 값을 �
 2026-09-23에 1·2단계를 실행했다. 두 환경 승인 후 같은 저장 plan의 17개 신규 생성 검사가 통과했고 apply는 17개 생성으로 끝났다. S3 preprod state 객체의 버전과 AES256 암호화, VPC·라우팅·보안 그룹·ECR 설정을 AWS API로 확인했다. VPC에는 NAT Gateway·EC2·ALB가 없다. 실행 세부 내용은 [Task 005](tasks/005-preprod-foundation-apply.md)에 기록했다. 3단계 prod 적용은 아직 진행하지 않았다.
 
 두 환경은 서로 다른 state key와 ECR 이름·VPC CIDR을 사용한다. 적용 역할의 S3 state 쓰기 권한도 환경별 key로 나뉜다. 다만 EC2 네트워크 생성·삭제 API 권한은 서울 리전으로 제한할 뿐 환경별 리소스 ID까지 묶지 못했다. 한 AWS 계정을 공유하는 한 실수에 대한 완전한 환경 격리는 아니다. 이 workflow에는 destroy 경로가 없으며 종료 시에는 별도 검토된 절차를 만든다.
+
+## 6. 비루트 운영 주체
+
+[Task 006](tasks/006-nonroot-operator.md)은 사람의 콘솔·로컬 CLI 운영을 계정 root에서 옮긴다. 이 프로젝트는 학습용 `preprod`·`prod`를 한 계정에서 논리적으로 분리한다. AWS Organizations를 만들거나 계정을 가입시키지 않는다. 현재 Free plan 계정이 Organizations에 가입하면 크레딧이 즉시 만료되고 유료 플랜으로 전환될 수 있으므로 [AWS Free Tier FAQ](https://aws.amazon.com/free/free-tier-faqs/)를 확인한다.
+
+`aws-fullstack-lab-operator` IAM 사용자는 콘솔 로그인과 `aws login`용 관리형 정책, 운영 역할 수임, 자신의 비밀번호·MFA 등록 권한만 가진다. `aws-fullstack-lab-bootstrap-operator` 역할은 해당 사용자와 MFA가 확인된 세션만 신뢰한다. 역할은 이 프로젝트의 state 버킷, GitHub OIDC 제공자와 기존 GitHub 역할을 관리하고, 자기 역할·사용자·Budget 설정은 읽는다. 자기 역할 정책과 Budget 변경 권한은 없다. GitHub Actions의 plan·apply OIDC 경로는 그대로 유지한다.
+
+### PR merge 후 최초 적용
+
+1. 계정 root에 MFA가 활성화됐는지 확인한다. 이는 계정 소유자가 자신의 기기로 직접 등록하며 MFA 코드와 복구 자료를 저장소나 대화에 올리지 않는다. [AWS root MFA 안내](https://docs.aws.amazon.com/IAM/latest/UserGuide/root-user-best-practices.html)를 따른다.
+2. PR merge 뒤 `main`에서 기존 관리자 프로필로 계정과 원격 bootstrap state를 확인한다. `terraform -chdir=infra/bootstrap plan -out=<임시 경로>`의 **IAM 사용자 1개, 역할 1개, 사용자 정책 1개, 사용자 관리형 정책 연결 1개, 역할 정책 1개 생성·기존 리소스 변경/삭제 0개**를 확인한 뒤 저장 plan을 적용한다. 사용자 콘솔 비밀번호·MFA 장치와 장기 액세스 키는 Terraform에서 만들지 않는다. 저장 plan은 임시 디렉터리에 두고 적용 후 삭제한다.
+3. IAM 콘솔에서 새 사용자의 콘솔 접근을 활성화한다. 초기 비밀번호는 사용자만 안전하게 받아 변경하고, 자신의 MFA 장치를 이름 `aws-fullstack-lab-operator`로 등록한다. 콘솔에 사용자로 로그인해 `aws-fullstack-lab-bootstrap-operator` 역할로 전환되는지 확인한다. [IAM 사용자 MFA 등록 안내](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_mfa_enable_virtual.html)를 참고한다.
+4. 비루트 CLI 프로필을 구성하고 호출 주체와 변경 없는 bootstrap plan을 확인한다. 마지막 검증 전에는 root 경로를 제거하지 않는다.
+
+### 비루트 CLI 프로필
+
+AWS CLI v2.32.0 이상에서 IAM 사용자로 로그인한다. 브라우저에 root 세션이 남아 있으면 `aws login`이 그 세션을 선택할 수 있으므로 첫 `get-caller-identity` 결과의 ARN이 반드시 `user/aws-fullstack-lab-operator`인지 확인한다. 다르면 로그아웃한 뒤 IAM 사용자로 다시 로그인한다. MFA 장치 ARN은 해당 사용자 IAM 보안 자격 증명 화면에서 확인한다.
+
+```bash
+aws configure set region ap-northeast-2 --profile aws-fullstack-operator-login
+aws login --profile aws-fullstack-operator-login
+aws sts get-caller-identity --profile aws-fullstack-operator-login
+
+aws configure set credential_process 'aws configure export-credentials --profile aws-fullstack-operator-login --format process' --profile aws-fullstack-operator-source
+aws configure set region ap-northeast-2 --profile aws-fullstack-operator-source
+aws configure set role_arn arn:aws:iam::065768154598:role/aws-fullstack-lab-bootstrap-operator --profile aws-fullstack-operator
+aws configure set source_profile aws-fullstack-operator-source --profile aws-fullstack-operator
+aws configure set mfa_serial '<사용자 MFA 장치 ARN>' --profile aws-fullstack-operator
+aws configure set region ap-northeast-2 --profile aws-fullstack-operator
+
+export AWS_PROFILE=aws-fullstack-operator
+aws sts get-caller-identity
+terraform -chdir=infra/bootstrap init -reconfigure -input=false \
+  -backend-config='bucket=aws-ecs-fullstack-app' \
+  -backend-config='key=bootstrap/terraform.tfstate' \
+  -backend-config='region=ap-northeast-2'
+terraform -chdir=infra/bootstrap plan -detailed-exitcode -input=false \
+  -var-file=terraform.tfvars
+```
+
+`get-caller-identity`의 ARN은 `assumed-role/aws-fullstack-lab-bootstrap-operator/`로 시작해야 하고, 변경 없는 plan은 종료 코드 0이어야 한다. 현재 역할은 프로젝트 bootstrap 관리용이다. 서비스 기반 적용은 계속 보호된 GitHub workflow에서 실행한다. 장기 액세스 키를 발급하거나 `aws configure export-credentials`의 출력을 로그·문서에 붙여 넣지 않는다. 로컬 프로필은 개인 기기의 `~/.aws/config`에만 저장한다. 이 단계가 성공하면 일상 작업에서 root 세션을 로그아웃한다. 운영 역할이나 MFA가 고장 난 경우에만 계정 root의 복구 절차를 사용하고 원인을 기록한다.
+
+AWS IAM Identity Center의 독립 계정용 account instance는 AWS 계정 접근용 permission set을 지원하지 않아 이 단일 계정의 사람 로그인 경로로 사용하지 않는다. [AWS Identity Center 인스턴스 비교](https://docs.aws.amazon.com/singlesignon/latest/userguide/identity-center-instances.html), [AWS CLI 역할·MFA 설정](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-role.html), [AWS CLI 임시 로그인](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sign-in.html)을 참고한다.
 
 ## 비용 관리
 
