@@ -4,9 +4,9 @@
 | --- | --- |
 | PR | [#4 · 보호된 서비스 기반 적용 경로](https://github.com/ban-dal/aws-ecs-fullstack-app/pull/4) |
 | 작업 브랜치 | `feat/protected-apply` |
-| 상태 | 진행 중: 코드·GitHub 환경 검증 완료, PR CI·검토 대기 |
+| 상태 | 완료: PR merge |
 | 시작일 | 2026-09-23 |
-| 완료일·merge commit | PR merge 후 기록 |
+| 완료일·merge commit | 2026-09-23 · `3d4ec05fb97b7ad361fe608e93122686c727ea9a` |
 
 ## 목표와 완료 기준
 
@@ -33,10 +33,11 @@ Task 003에서 선언한 VPC·서브넷·보안 그룹·ECR을 실제로 적용�
 - 로컬 `terraform fmt -check -recursive infra`, bootstrap·plan validate, workflow YAML·모든 shell 단계 구문 검사와 `git diff --check`가 통과했다. 실제 preprod plan JSON으로 생성 제한을 통과시켰고, 변경·다른 모듈·17개 초과 생성은 각각 차단되는 것을 확인했다.
 - AWS 원격 bootstrap plan은 IAM 역할 2개와 정책 3개 생성, 기존 리소스 변경·삭제 0개로 확인했다. 실제 적용 전 재실행해 결과를 다시 확인한다.
 - 두 GitHub 적용 환경의 `ban-dal` 승인자, 자기 승인 허용, `main` 브랜치 제한과 역할 ARN 변수를 API로 다시 읽어 확인했다. workflow는 아직 `main`에 merge되지 않아 실제 실행하지 않았다.
+- PR #4에서 앱 CI, Terraform validate, `preprod`·`prod` plan이 모두 통과한 뒤 merge됐다. PR 단계에서는 실제 apply를 실행하지 않았다.
 - 현재 workflow는 생성만 허용하므로 드리프트 수정·리소스 교체·삭제는 차단한다. 이후 변경은 별도 PR에서 권한과 승인 절차를 확장한다.
 - 코드와 GitHub 환경 설정만으로는 AWS 리소스 비용이 늘지 않는다. 실제 서비스 기반을 적용하면 환경별 17개 리소스가 생성될 수 있다. VPC·Internet Gateway 자체에는 추가 요금이 없지만 ECR 이미지 저장량·전송량과 S3 state 요청에는 사용량에 따른 비용이 생길 수 있다. NAT, EC2, ALB, 퍼블릭 IPv4는 여전히 만들지 않는다.
 - 실제 AWS 적용 여부: 미적용.
 
 ## 남은 사항과 다음 Task
 
-PR merge 후 최초 bootstrap IAM 적용을 명시적으로 승인받아 실행하고 결과를 다음 Task에서 기록한다. 그다음 보호된 `preprod` 적용과 리소스 확인, 필요 시 `prod` 적용을 진행한다. 앱 공개 경로는 별도 비용 검토 후 추가한다.
+[Task 005](005-preprod-foundation-apply.md)에서 최초 bootstrap IAM 적용을 승인받아 실행하고, 보호된 `preprod` 적용과 리소스 확인을 기록한다. `prod`는 preprod 결과를 검토한 뒤 별도 결정한다. 앱 공개 경로는 별도 비용 검토 후 추가한다.
