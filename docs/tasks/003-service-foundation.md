@@ -2,9 +2,9 @@
 
 | 항목 | 값 |
 | --- | --- |
-| PR | 생성 후 링크 입력 |
+| PR | [#3 · 서비스 기반 네트워크와 ECR](https://github.com/ban-dal/aws-ecs-fullstack-app/pull/3) |
 | 작업 브랜치 | `feat/service-infra-foundation` |
-| 상태 | 진행 중: Terraform 코드와 검증 |
+| 상태 | 진행 중: Terraform 코드 완료, PR plan 검증 대기 |
 | 시작일 | 2026-09-23 |
 | 완료일·merge commit | PR merge 후 기록 |
 
