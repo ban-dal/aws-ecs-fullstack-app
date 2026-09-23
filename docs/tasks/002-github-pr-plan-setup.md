@@ -2,9 +2,9 @@
 
 | 항목 | 값 |
 | --- | --- |
-| PR | [#2 · GitHub PR plan 환경 구성](https://github.com/ban-dal/aws-ecs-fullstack-app/pull/2) (Draft) |
+| PR | [#2 · GitHub PR plan 환경 구성](https://github.com/ban-dal/aws-ecs-fullstack-app/pull/2) |
 | 작업 브랜치 | `feat/github-pr-plan-setup` |
-| 상태 | 진행 중: 환경·변수 설정 완료, PR plan 검증 대기 |
+| 상태 | 진행 중: 환경·변수·PR plan 검증 완료, PR merge 대기 |
 | 시작일 | 2026-09-23 |
 | 완료일·merge commit | PR merge 후 기록 |
 
@@ -18,7 +18,7 @@ Task 001에서 만든 GitHub OIDC plan 역할을 실제 PR에서 사용한다. `
 
 - `preprod-plan`, `prod-plan` GitHub 환경을 만들고 `ban-dal`을 필수 승인자로 지정했다. 사용자 선택에 따라 환경 작업의 자기 승인을 허용했다(`prevent_self_review=false`). PR 자체의 Approve와 환경 배포 승인은 서로 다른 기능이다.
 - `TF_STATE_BUCKET`, `AWS_PLAN_ROLE_ARN`, `AWS_ACCOUNT_ID`, `AWS_REGION` 저장소 변수를 Task 001의 Terraform output과 대조해 등록하고 다시 읽어 확인했다. AWS 키·토큰은 GitHub에 저장하지 않았다.
-- PR 검증 결과와 이후 재구성 방법을 `docs/operations.md`와 이 문서에 기록한다.
+- PR 검증 결과와 이후 재구성 방법을 `docs/operations.md`와 이 문서에 기록했다.
 
 ### 확인한 bootstrap output
 
@@ -45,7 +45,9 @@ GitHub의 **배포 환경 승인**은 PR Approve와 별개다. 1인 운영을 �
 
 ## 검증과 운영 영향
 
-- 아직 실제 PR plan 검증 전이다. PR #2에서 두 환경 작업을 수동 승인하고 결과를 확인한 뒤 여기에 기록한다.
+- [PR #2 Terraform 실행 35823513637](https://github.com/ban-dal/aws-ecs-fullstack-app/actions/runs/35823513637)에서 `validate`, `plan (preprod)`, `plan (prod)`가 모두 성공했다. 앱 CI도 성공했다.
+- `ban-dal`이 두 환경 작업을 수동 승인한 뒤 GitHub OIDC로 plan 역할을 맡았다. 두 작업 모두 S3 backend를 초기화하고 AWS 계정 `065768154598`을 확인했다.
+- `preprod/terraform.tfstate`와 `prod/terraform.tfstate`를 각각 backend key로 지정했다. plan 결과는 환경별 `plan_identity` 출력값 추가뿐이며 실제 AWS 인프라 생성·변경·삭제는 없었다. `apply`는 실행하지 않았다.
 - 이 Task의 GitHub 설정 자체는 AWS 리소스를 생성하지 않는다. plan이 사용하는 S3 요청과 잠금 파일에는 사용량에 따른 비용이 생길 수 있다.
 
 ## 남은 사항과 다음 Task

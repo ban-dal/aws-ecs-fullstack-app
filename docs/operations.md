@@ -1,6 +1,6 @@
 # 운영 가이드
 
-Terraform bootstrap은 2026-09-23에 적용했고 state를 S3로 이전했다. GitHub PR plan 환경과 저장소 변수도 설정했으며, 실제 PR plan 결과는 검증 중이다. 아래 bootstrap 명령은 새 계정에서 재현할 때 참고하며, 현재 계정에서는 원격 state를 연결한 뒤 plan으로 상태를 확인한다.
+Terraform bootstrap은 2026-09-23에 적용했고 state를 S3로 이전했다. GitHub PR plan 환경과 저장소 변수를 설정했으며, PR #2에서 두 환경의 실제 plan을 검증했다. 아래 bootstrap 명령은 새 계정에서 재현할 때 참고하며, 현재 계정에서는 원격 state를 연결한 뒤 plan으로 상태를 확인한다.
 
 ## 선행 준비
 
@@ -63,7 +63,7 @@ GitHub 환경 `preprod-plan`, `prod-plan`을 만들고 승인 규칙을 설정�
 
 1인 저장소에서는 PR 작성자가 자신의 PR에 Approve할 수 없는 것과 GitHub 환경 작업을 승인하는 것은 다른 규칙이다. 환경의 자기 승인 방지(`prevent_self_review`)를 켜면 작업을 시작한 계정 외에 승인자가 필요하다. 이를 끄면 같은 계정이 환경 작업을 승인할 수 있으나 독립 검토는 이루어지지 않는다. 승인 정책을 먼저 결정하고 환경 보호를 설정한 다음 저장소 변수를 등록한다. 결정과 실제 설정은 [Task 002](tasks/002-github-pr-plan-setup.md)에 기록한다.
 
-2026-09-23에 `preprod-plan`·`prod-plan` 환경에 `ban-dal` 필수 수동 승인자를 설정하고 자기 환경 승인(`prevent_self_review=false`)을 허용했다. 이후 bootstrap output과 대조한 네 저장소 변수를 등록하고 읽어 확인했다. PR #2의 두 plan 작업을 각각 승인해 실제 결과를 검증해야 한다.
+2026-09-23에 `preprod-plan`·`prod-plan` 환경에 `ban-dal` 필수 수동 승인자를 설정하고 자기 환경 승인(`prevent_self_review=false`)을 허용했다. 이후 bootstrap output과 대조한 네 저장소 변수를 등록하고 읽어 확인했다. [PR #2 실행](https://github.com/ban-dal/aws-ecs-fullstack-app/actions/runs/35823513637)에서 두 환경 작업을 각각 승인했고, OIDC 인증·S3 backend 초기화·예상 계정 확인·plan 성공을 확인했다. 두 plan은 `plan_identity` 출력값 추가만 표시했으며 실제 인프라 변경은 없었다.
 
 현재 OIDC 역할은 환경별 `preprod/terraform.tfstate`, `prod/terraform.tfstate` 읽기와 잠금 파일 작업에만 접근한다. GitHub Actions는 장기 AWS 키를 저장하지 않는다. 향후 서비스 리소스를 추가할 때 provider의 필요한 읽기 권한을 검토해 role policy를 늘린다.
 
