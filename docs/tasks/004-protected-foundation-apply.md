@@ -2,9 +2,9 @@
 
 | 항목 | 값 |
 | --- | --- |
-| PR | 생성 후 링크 입력 |
+| PR | [#4 · 보호된 서비스 기반 적용 경로](https://github.com/ban-dal/aws-ecs-fullstack-app/pull/4) |
 | 작업 브랜치 | `feat/protected-apply` |
-| 상태 | 진행 중: 코드·GitHub 환경 검증 완료, PR 검토 대기 |
+| 상태 | 진행 중: 코드·GitHub 환경 검증 완료, PR CI·검토 대기 |
 | 시작일 | 2026-09-23 |
 | 완료일·merge commit | PR merge 후 기록 |
 
