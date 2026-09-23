@@ -55,4 +55,4 @@ flowchart LR
 - **permissions boundary** ([`boundary.tf`](../infra/bootstrap/boundary.tf)): 모든 GitHub 역할의 상한. IAM·STS 권한은 얻지 못한다.
 - **사람의 운영 역할** ([`operator.tf`](../infra/bootstrap/operator.tf)): MFA 세션만 신뢰한다. 프로젝트 인프라 전체를 바꿀 수 있으므로 일상 배포에는 쓰지 않는다.
 - **GitHub 환경 승인** ([`scripts/check-github-settings.sh`](../scripts/check-github-settings.sh)): 1인 저장소라 자기 승인을 허용한다.
-- **적용 workflow의 한계** ([`apply-foundation.yml`](../.github/workflows/apply-foundation.yml)): 신규 생성만 적용할 수 있고, 승인한 plan과 적용되는 plan이 묶여 있지 않다.
+- **적용 workflow** ([`apply-foundation.yml`](../.github/workflows/apply-foundation.yml), [`scripts/tfplan.sh`](../scripts/tfplan.sh)): 승인한 plan과 같은 변경만 적용한다. 삭제·교체는 막으며, destroy 경로는 아직 없다.

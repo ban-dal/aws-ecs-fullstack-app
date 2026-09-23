@@ -2,9 +2,9 @@
 # plan과 apply는 서로 다른 OIDC 역할과 GitHub 환경을 쓴다. plan 파일에는 민감한 값이
 # 들어갈 수 있으므로 저장 plan은 runner 밖으로 내보내지 않는다.
 #
-# 알려진 한계: 아래 검사는 module.service_foundation의 신규 생성만 허용하므로 수정,
-# 교체, 삭제는 아직 여기서 적용할 수 없다. apply 작업은 승인 뒤에 plan을 다시
-# 만들기 때문에, 승인한 plan과 적용되는 plan이 묶여 있지 않다.
+# plan 작업은 변경 요약을 실행 화면에 올리고 변경 내용의 fingerprint를 넘긴다. apply
+# 작업은 승인 뒤 plan을 다시 만들고, fingerprint가 승인 때와 같을 때만 적용한다. 그래서
+# 승인한 plan과 적용되는 plan이 같다. 허용하는 변경의 기준은 scripts/tfplan.sh에 있다.
 name: Apply service foundation
 
 on:
@@ -19,6 +19,11 @@ on:
 permissions:
   contents: read
 
+# shell을 지정해야 -eo pipefail로 실행되어 파이프 중간의 실패가 가려지지 않는다.
+defaults:
+  run:
+    shell: bash
+
 concurrency:
   group: foundation-${{ inputs.environment }}
   cancel-in-progress: false
@@ -32,42 +37,50 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    outputs:
+      fingerprint: ${{ steps.plan.outputs.fingerprint }}
     env:
       AWS_REGION: ${{ vars.AWS_REGION || 'ap-northeast-2' }}
-      AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
       TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
       TARGET_ENV: ${{ inputs.environment }}
       TF_VAR_expected_account_id: ${{ vars.AWS_ACCOUNT_ID }}
       TF_IN_AUTOMATION: 'true'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
           terraform_version: '1.14.0'
+          terraform_wrapper: false
       - name: Check required configuration
         env:
           AWS_PLAN_ROLE_ARN: ${{ vars.AWS_PLAN_ROLE_ARN }}
         run: |
           test -n "$AWS_PLAN_ROLE_ARN"
-          test -n "$AWS_ACCOUNT_ID"
+          test -n "$TF_VAR_expected_account_id"
           test -n "$TF_STATE_BUCKET"
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           role-to-assume: ${{ vars.AWS_PLAN_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-      - name: Verify AWS account
-        run: test "$(aws sts get-caller-identity --query Account --output text)" = "$AWS_ACCOUNT_ID"
       - name: Plan the selected state
+        id: plan
         run: |
           terraform -chdir=infra/plan init -input=false \
             -backend-config="bucket=$TF_STATE_BUCKET" \
             -backend-config="key=$TARGET_ENV/terraform.tfstate" \
             -backend-config="region=$AWS_REGION"
           terraform -chdir=infra/plan plan -input=false -no-color -lock-timeout=5m \
-            -var="environment=$TARGET_ENV"
+            -var="environment=$TARGET_ENV" -out="$RUNNER_TEMP/foundation.tfplan"
+          terraform -chdir=infra/plan show -json "$RUNNER_TEMP/foundation.tfplan" > "$RUNNER_TEMP/foundation.json"
+          {
+            echo "## $TARGET_ENV plan"
+            scripts/tfplan.sh summary "$RUNNER_TEMP/foundation.json"
+          } >> "$GITHUB_STEP_SUMMARY"
+          scripts/tfplan.sh check-foundation "$RUNNER_TEMP/foundation.json" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "fingerprint=$(scripts/tfplan.sh fingerprint "$RUNNER_TEMP/foundation.json")" >> "$GITHUB_OUTPUT"
 
   apply:
     needs: plan
@@ -80,17 +93,16 @@ jobs:
       id-token: write
     env:
       AWS_REGION: ${{ vars.AWS_REGION || 'ap-northeast-2' }}
-      AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
       TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
       TARGET_ENV: ${{ inputs.environment }}
       TF_VAR_expected_account_id: ${{ vars.AWS_ACCOUNT_ID }}
       TF_IN_AUTOMATION: 'true'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
           terraform_version: '1.14.0'
           terraform_wrapper: false
@@ -99,32 +111,30 @@ jobs:
           AWS_APPLY_ROLE_ARN: ${{ vars.AWS_APPLY_ROLE_ARN }}
         run: |
           test -n "$AWS_APPLY_ROLE_ARN"
-          test -n "$AWS_ACCOUNT_ID"
+          test -n "$TF_VAR_expected_account_id"
           test -n "$TF_STATE_BUCKET"
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           role-to-assume: ${{ vars.AWS_APPLY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-      - name: Verify AWS account
-        run: test "$(aws sts get-caller-identity --query Account --output text)" = "$AWS_ACCOUNT_ID"
-      - name: Create and inspect an apply plan
+      - name: Plan again and compare with the approved plan
+        env:
+          APPROVED_FINGERPRINT: ${{ needs.plan.outputs.fingerprint }}
         run: |
           terraform -chdir=infra/plan init -input=false \
             -backend-config="bucket=$TF_STATE_BUCKET" \
             -backend-config="key=$TARGET_ENV/terraform.tfstate" \
             -backend-config="region=$AWS_REGION"
-          terraform -chdir=infra/plan plan -input=false -lock-timeout=5m \
+          terraform -chdir=infra/plan plan -input=false -no-color -lock-timeout=5m \
             -var="environment=$TARGET_ENV" -out="$RUNNER_TEMP/foundation.tfplan"
-          terraform -chdir=infra/plan show -no-color "$RUNNER_TEMP/foundation.tfplan"
           terraform -chdir=infra/plan show -json "$RUNNER_TEMP/foundation.tfplan" > "$RUNNER_TEMP/foundation.json"
-      - name: Allow only foundation creation
-        run: |
-          jq -e '
-            all(.resource_changes[]?;
-              (.address | startswith("module.service_foundation.")) and
-              (.change.actions == ["create"] or .change.actions == ["no-op"])
-            ) and
-            ([.resource_changes[]? | select(.change.actions == ["create"])] | length <= 17)
-          ' "$RUNNER_TEMP/foundation.json" >/dev/null
-      - name: Apply the inspected plan
-        run: terraform -chdir=infra/plan apply -input=false "$RUNNER_TEMP/foundation.tfplan"
+          scripts/tfplan.sh check-foundation "$RUNNER_TEMP/foundation.json"
+          fingerprint="$(scripts/tfplan.sh fingerprint "$RUNNER_TEMP/foundation.json")"
+          if [ "$fingerprint" != "$APPROVED_FINGERPRINT" ]; then
+            echo "승인 이후 plan이 바뀌었다. 적용하지 않는다. workflow를 다시 실행해 새 plan을 승인한다." >&2
+            scripts/tfplan.sh summary "$RUNNER_TEMP/foundation.json" >&2
+            exit 1
+          fi
+          echo "승인한 plan과 같다: $fingerprint"
+      - name: Apply the approved plan
+        run: terraform -chdir=infra/plan apply -input=false -no-color "$RUNNER_TEMP/foundation.tfplan"
