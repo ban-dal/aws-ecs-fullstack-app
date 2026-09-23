@@ -26,9 +26,12 @@ aws sts get-caller-identity
 
 ## 1. Bootstrap
 
-`infra/bootstrap/terraform.tfvars.example`을 `infra/bootstrap/terraform.tfvars`로 복사한다. 버킷 이름과 알림 이메일을 입력한다. 이 저장소의 GitHub OIDC 기본 subject는 `repo:ban-dal@46153202/aws-ecs-fullstack-app@1382568125`로 확인했다. 저장소가 이전·재생성되면 GitHub 설정을 다시 확인한다. 이메일이 `null`이면 Budget이 생성되지 않는다. 비용 Budget은 크레딧을 제외한 사용 비용을 기준으로 월간 80% 실제 사용과 100% 예상 사용을 알린다.
+`infra/bootstrap/terraform.tfvars.example`을 `infra/bootstrap/terraform.tfvars`로 복사한다. 계정 ID, 버킷 이름과 알림 이메일을 입력한다. provider는 `expected_account_id`와 다른 계정의 자격 증명이면 API 호출 전에 실패한다. 이 저장소의 GitHub OIDC 기본 subject는 `repo:ban-dal@46153202/aws-ecs-fullstack-app@1382568125`로 확인했다. 저장소가 이전·재생성되면 GitHub 설정을 다시 확인한다. 이메일이 `null`이면 Budget이 생성되지 않는다. 비용 Budget은 크레딧을 제외한 사용 비용을 기준으로 월간 80% 실제 사용과 100% 예상 사용을 알린다.
+
+새 계정의 첫 apply에는 아직 state 버킷이 없으므로 커밋된 S3 backend 대신 임시 local backend override를 쓴다. `*_override.tf`는 Git에서 제외된다.
 
 ```bash
+printf 'terraform {\n  backend "local" {}\n}\n' > infra/bootstrap/backend_override.tf
 terraform -chdir=infra/bootstrap init
 terraform -chdir=infra/bootstrap fmt -check
 terraform -chdir=infra/bootstrap validate
@@ -36,10 +39,10 @@ terraform -chdir=infra/bootstrap plan -var-file=terraform.tfvars
 terraform -chdir=infra/bootstrap apply -var-file=terraform.tfvars
 ```
 
-첫 apply는 로컬 state를 만든다. 이후 `infra/bootstrap/backend.s3.tf.example`을 `backend.s3.tf`로 복사하고, 같은 버킷의 `bootstrap/terraform.tfstate`로 이전한다. 이전과 S3 버전 확인이 끝날 때까지 로컬 state를 안전하게 보관한다. `backend.s3.tf`, `.tfvars`, state는 Git에서 제외한다. 기존 계정에서는 새로 apply하지 말고 먼저 원격 backend를 연결한다.
+첫 apply는 로컬 state를 만든다. 이후 override 파일을 지우고 커밋된 `backend.s3.tf`로 같은 버킷의 `bootstrap/terraform.tfstate`에 이전한다. 이전과 S3 버전 확인이 끝날 때까지 로컬 state를 안전하게 보관한다. `.tfvars`와 state는 Git에서 제외한다. 기존 계정에서는 override 없이 원격 backend를 먼저 연결한다.
 
 ```bash
-cp infra/bootstrap/backend.s3.tf.example infra/bootstrap/backend.s3.tf
+rm infra/bootstrap/backend_override.tf
 terraform -chdir=infra/bootstrap init -migrate-state \
   -backend-config="bucket=<state-bucket>" \
   -backend-config="key=bootstrap/terraform.tfstate" \
@@ -59,13 +62,13 @@ terraform -chdir=infra/bootstrap output
 
 ## 2. GitHub 설정
 
-GitHub 환경 `preprod-plan`, `prod-plan`을 만들고 승인 규칙을 설정한다. 저장소 변수 `TF_STATE_BUCKET`, `AWS_PLAN_ROLE_ARN`, `AWS_ACCOUNT_ID`에는 bootstrap output 값을, `AWS_REGION`에는 버킷 리전을 넣는다. 앞의 세 변수 중 하나라도 없으면 PR의 AWS plan 작업은 건너뛴다. fork PR도 AWS 자격 증명을 받지 않는다. 이 저장소에서 온 PR은 환경 승인 후에만 plan 역할을 사용하도록 환경 보호를 설정한다. plan은 호출한 AWS 계정 ID가 bootstrap 계정과 같은지도 확인한다.
+GitHub 환경 `preprod-plan`, `prod-plan`을 만들고 승인 규칙을 설정한다. 저장소 변수 `TF_STATE_BUCKET`, `AWS_ACCOUNT_ID`에는 bootstrap output 값을, `AWS_REGION`에는 버킷 리전을 넣는다. 두 변수 중 하나라도 없으면 PR의 AWS plan 작업은 건너뛴다. Task 008부터 plan 역할은 환경별이므로 `preprod-plan`·`prod-plan` 환경 변수 `AWS_PLAN_ROLE_ARN`에 `plan_role_arns`의 해당 값을 넣는다. 환경 변수가 없으면 plan 작업은 역할 확인 단계에서 실패한다. fork PR도 AWS 자격 증명을 받지 않는다. 이 저장소에서 온 PR은 환경 승인 후에만 plan 역할을 사용하도록 환경 보호를 설정한다. plan은 호출한 AWS 계정 ID가 bootstrap 계정과 같은지도 확인한다.
 
 1인 저장소에서는 PR 작성자가 자신의 PR에 Approve할 수 없는 것과 GitHub 환경 작업을 승인하는 것은 다른 규칙이다. 환경의 자기 승인 방지(`prevent_self_review`)를 켜면 작업을 시작한 계정 외에 승인자가 필요하다. 이를 끄면 같은 계정이 환경 작업을 승인할 수 있으나 독립 검토는 이루어지지 않는다. 승인 정책을 먼저 결정하고 환경 보호를 설정한 다음 저장소 변수를 등록한다. 결정과 실제 설정은 [Task 002](tasks/002-github-pr-plan-setup.md)에 기록한다.
 
 2026-09-23에 `preprod-plan`·`prod-plan` 환경에 `ban-dal` 필수 수동 승인자를 설정하고 자기 환경 승인(`prevent_self_review=false`)을 허용했다. 이후 bootstrap output과 대조한 네 저장소 변수를 등록하고 읽어 확인했다. [PR #2 실행](https://github.com/ban-dal/aws-ecs-fullstack-app/actions/runs/35823513637)에서 두 환경 작업을 각각 승인했고, OIDC 인증·S3 backend 초기화·예상 계정 확인·plan 성공을 확인했다. 두 plan은 `plan_identity` 출력값 추가만 표시했으며 실제 인프라 변경은 없었다.
 
-GitHub Actions는 장기 AWS 키를 저장하지 않는다. plan 역할은 환경별 state 읽기와 잠금 파일 작업, 서비스 기반 VPC·ECR refresh용 읽기 권한을 갖는다. Task 005에서 해당 읽기 정책을 AWS에 적용했다. state 객체 쓰기 권한은 plan 역할에 없다.
+GitHub Actions는 장기 AWS 키를 저장하지 않는다. 환경별 plan 역할은 자기 환경 state 읽기와 잠금 파일 작업, 서비스 기반 VPC·ECR refresh용 읽기 권한만 갖는다. state 객체 쓰기 권한은 plan 역할에 없다. 권한 경계는 [7절](#7-github-역할-권한-경계)을 따른다.
 
 ## 3. 배포와 확인
 
@@ -115,9 +118,6 @@ workflow는 `main`에서 수동으로 `preprod` 또는 `prod` 하나를 선택�
 test "$(git branch --show-current)" = "main"
 export AWS_PROFILE=aws-fullstack-terraform
 aws sts get-caller-identity
-if [ ! -f infra/bootstrap/backend.s3.tf ]; then
-  cp infra/bootstrap/backend.s3.tf.example infra/bootstrap/backend.s3.tf
-fi
 terraform -chdir=infra/bootstrap init -reconfigure -input=false \
   -backend-config="bucket=aws-ecs-fullstack-app" \
   -backend-config="key=bootstrap/terraform.tfstate" \
@@ -132,7 +132,7 @@ terraform -chdir=infra/bootstrap apply -input=false "$TF_PLAN_DIR/bootstrap.tfpl
 terraform -chdir=infra/bootstrap output foundation_apply_role_arns
 ```
 
-`backend.s3.tf`, `terraform.tfvars`, plan 파일과 자격 증명을 커밋하지 않는다. 실제 적용 뒤에는 실행자, 날짜, commit, plan·apply 결과와 두 IAM 역할 ARN을 이 문서 또는 다음 Task에 기록한다. 기존 관리자 자격 증명을 계속 배포에 사용하지 않는다. [Terraform 저장 plan](https://developer.hashicorp.com/terraform/tutorials/cli/plan)에는 민감한 데이터가 들어갈 수 있으므로 임시 디렉터리에서만 사용한다.
+`terraform.tfvars`, plan 파일과 자격 증명을 커밋하지 않는다. 실제 적용 뒤에는 실행자, 날짜, commit, plan·apply 결과와 두 IAM 역할 ARN을 이 문서 또는 다음 Task에 기록한다. 기존 관리자 자격 증명을 계속 배포에 사용하지 않는다. [Terraform 저장 plan](https://developer.hashicorp.com/terraform/tutorials/cli/plan)에는 민감한 데이터가 들어갈 수 있으므로 임시 디렉터리에서만 사용한다.
 
 #### 2026-09-23 최초 IAM 적용 기록
 
@@ -144,7 +144,7 @@ terraform -chdir=infra/bootstrap output foundation_apply_role_arns
 
 ### 환경별 서비스 기반 적용
 
-bootstrap 적용 후 `foundation_apply_role_arns`의 `preprod`·`prod` 값을 각 GitHub 적용 환경의 `AWS_APPLY_ROLE_ARN` 변수와 대조한다. `TF_STATE_BUCKET`, `AWS_ACCOUNT_ID`, `AWS_REGION`, `AWS_PLAN_ROLE_ARN`은 기존 저장소 변수를 사용한다. 장기 AWS 키는 등록하지 않는다.
+bootstrap 적용 후 `foundation_apply_role_arns`의 `preprod`·`prod` 값을 각 GitHub 적용 환경의 `AWS_APPLY_ROLE_ARN` 변수와 대조한다. `TF_STATE_BUCKET`, `AWS_ACCOUNT_ID`, `AWS_REGION`은 저장소 변수를, `AWS_PLAN_ROLE_ARN`은 각 `*-plan` 환경 변수를 사용한다. 장기 AWS 키는 등록하지 않는다.
 
 1. GitHub Actions에서 `Apply service foundation`을 `main`의 `preprod`로 수동 실행한다. `preprod-plan` 승인 후 plan 결과와 예상 계정을 확인하고, `preprod-apply`를 승인한다.
 2. 적용 로그, `preprod/terraform.tfstate`, VPC·서브넷·보안 그룹·ECR 존재를 확인한다. 이 workflow는 공개 앱이나 EC2·ALB를 만들지 않는다.
@@ -152,13 +152,13 @@ bootstrap 적용 후 `foundation_apply_role_arns`의 `preprod`·`prod` 값을 �
 
 2026-09-23에 1·2단계를 실행했다. 두 환경 승인 후 같은 저장 plan의 17개 신규 생성 검사가 통과했고 apply는 17개 생성으로 끝났다. S3 preprod state 객체의 버전과 AES256 암호화, VPC·라우팅·보안 그룹·ECR 설정을 AWS API로 확인했다. VPC에는 NAT Gateway·EC2·ALB가 없다. 실행 세부 내용은 [Task 005](tasks/005-preprod-foundation-apply.md)에 기록했다. 3단계 prod 적용은 아직 진행하지 않았다.
 
-두 환경은 서로 다른 state key와 ECR 이름·VPC CIDR을 사용한다. 적용 역할의 S3 state 쓰기 권한도 환경별 key로 나뉜다. 다만 EC2 네트워크 생성·삭제 API 권한은 서울 리전으로 제한할 뿐 환경별 리소스 ID까지 묶지 못했다. 한 AWS 계정을 공유하는 한 실수에 대한 완전한 환경 격리는 아니다. 이 workflow에는 destroy 경로가 없으며 종료 시에는 별도 검토된 절차를 만든다.
+두 환경은 서로 다른 state key와 ECR 이름·VPC CIDR을 사용한다. 적용 역할의 S3 state 쓰기 권한도 환경별 key로 나뉜다. Task 008부터 EC2 네트워크 생성은 요청 태그 `Environment`가, 기존 리소스 변경·삭제는 리소스 태그 `Environment`가 자기 환경일 때만 허용한다. IAM과 계정 수준 장애는 한 계정을 공유하므로 분리되지 않는다. 이 workflow에는 destroy 경로가 없으며 종료 시에는 별도 검토된 절차를 만든다.
 
 ## 6. 비루트 운영 주체
 
 [Task 006](tasks/006-nonroot-operator.md)은 사람의 콘솔·로컬 CLI 운영을 계정 root에서 옮긴다. 이 프로젝트는 학습용 `preprod`·`prod`를 한 계정에서 논리적으로 분리한다. AWS Organizations를 만들거나 계정을 가입시키지 않는다. 현재 Free plan 계정이 Organizations에 가입하면 크레딧이 즉시 만료되고 유료 플랜으로 전환될 수 있으므로 [AWS Free Tier FAQ](https://aws.amazon.com/free/free-tier-faqs/)를 확인한다.
 
-`aws-fullstack-lab-operator` IAM 사용자는 콘솔 로그인과 `aws login`용 관리형 정책, 운영 역할 수임, 자신의 비밀번호·MFA 등록 권한만 가진다. `aws-fullstack-lab-bootstrap-operator` 역할은 해당 사용자와 MFA가 확인된 세션만 신뢰한다. 역할은 이 프로젝트의 state 버킷, GitHub OIDC 제공자와 기존 GitHub 역할을 관리하고, 자기 역할·사용자·Budget 설정은 읽는다. 자기 역할 정책과 Budget 변경 권한은 없다. 단, GitHub 역할의 정책·신뢰 정책 변경을 거쳐 계정 관리자 수준 권한으로 확대될 수 있으므로 root와 같은 수준으로 MFA와 사용 기록을 관리한다. GitHub Actions의 plan·apply OIDC 경로는 그대로 유지한다.
+`aws-fullstack-lab-operator` IAM 사용자는 콘솔 로그인과 `aws login`용 관리형 정책, 운영 역할 수임, 자신의 비밀번호·MFA 등록 권한만 가진다. `aws-fullstack-lab-bootstrap-operator` 역할은 해당 사용자와 MFA가 확인된 세션만 신뢰한다. 역할은 이 프로젝트의 state 버킷, GitHub OIDC 제공자와 기존 GitHub 역할을 관리하고, 자기 역할·사용자·Budget 설정은 읽는다. 자기 역할 정책과 Budget 변경 권한은 없다. GitHub 역할의 정책·신뢰 정책을 바꿔 수임하더라도 [7절](#7-github-역할-권한-경계)의 boundary 안으로 제한된다. GitHub Actions의 plan·apply OIDC 경로는 그대로 유지한다.
 
 ### PR merge 후 최초 적용
 
@@ -170,6 +170,12 @@ bootstrap 적용 후 `foundation_apply_role_arns`의 `preprod`·`prod` 값을 �
 #### 2026-09-24 실제 적용 기록
 
 PR #6 merge commit `ffffc4b7dd90d10922c6d2d051f95c956d1816e7`의 `main`에서 root MFA와 계정·S3 원격 state를 확인했다. 저장 plan은 IAM 사용자·역할·정책 등 5개 생성, 기존 변경·삭제 0개였고 사용자 승인 후 그대로 적용했다. 사후 bootstrap plan은 변경 없음(종료 코드 0)이었으며 저장 plan은 삭제했다. IAM 사용자의 콘솔 로그인과 패스키 MFA, `aws login`의 IAM 사용자 호출 주체를 확인했다. 패스키만으로는 CLI 역할 수임이 거절됐고 자기 MFA 관리 권한도 부족해 TOTP 추가가 막혔다. Task 007에서 정책을 보완한 뒤 비루트 검증을 마친다.
+
+#### 2026-09-24 Task 007 적용과 비루트 검증 기록
+
+- PR #7 merge commit `5307e3357c8dcf3279cf626dec1631b83b8dba89`의 `main`에서 계정 `065768154598`의 root 세션으로 bootstrap 저장 plan을 만들었다. `aws_iam_user_policy.operator`, `aws_iam_role_policy.operator` **2개 수정, 생성·삭제 0개**였고 정책 statement가 PR과 일치하는 것을 확인했다. 사용자 요청에 따라 Codex가 저장 plan을 그대로 적용했으며 결과도 2개 수정이었다. 저장 plan은 삭제했고 사후 plan은 변경 없음(종료 코드 0)이었다.
+- 사용자가 콘솔에서 인증 앱(TOTP) 장치 `arn:aws:iam::065768154598:mfa/aws-fullstack-lab-operator`를 등록했다. 콘솔용 패스키는 유지한다.
+- 사용자가 TOTP 코드를 입력해 `aws-fullstack-lab-bootstrap-operator` 역할을 수임했다. 그 세션을 쓰는 `aws-fullstack-operator-terraform` 프로필로 실행한 bootstrap plan은 권한 오류 없이 변경 없음(종료 코드 0)이었다. 이로써 비루트 bootstrap 운영 경로를 검증했다. root 브라우저·CLI 세션 종료는 사용자가 직접 수행한다.
 
 ### 비루트 CLI 프로필
 
@@ -186,8 +192,11 @@ aws configure set role_arn arn:aws:iam::065768154598:role/aws-fullstack-lab-boot
 aws configure set source_profile aws-fullstack-operator-source --profile aws-fullstack-operator
 aws configure set mfa_serial '<인증 앱 TOTP MFA 장치 ARN>' --profile aws-fullstack-operator
 aws configure set region ap-northeast-2 --profile aws-fullstack-operator
+aws configure set credential_process 'aws configure export-credentials --profile aws-fullstack-operator --format process' --profile aws-fullstack-operator-terraform
+aws configure set region ap-northeast-2 --profile aws-fullstack-operator-terraform
 
-export AWS_PROFILE=aws-fullstack-operator
+aws sts get-caller-identity --profile aws-fullstack-operator
+export AWS_PROFILE=aws-fullstack-operator-terraform
 aws sts get-caller-identity
 terraform -chdir=infra/bootstrap init -reconfigure -input=false \
   -backend-config='bucket=aws-ecs-fullstack-app' \
@@ -197,9 +206,26 @@ terraform -chdir=infra/bootstrap plan -detailed-exitcode -input=false \
   -var-file=terraform.tfvars
 ```
 
-`get-caller-identity`의 ARN은 `assumed-role/aws-fullstack-lab-bootstrap-operator/`로 시작해야 하고, 변경 없는 plan은 종료 코드 0이어야 한다. 현재 역할은 프로젝트 bootstrap 관리용이다. 서비스 기반 적용은 계속 보호된 GitHub workflow에서 실행한다. 장기 액세스 키를 발급하거나 `aws configure export-credentials`의 출력을 로그·문서에 붙여 넣지 않는다. 로컬 프로필은 개인 기기의 `~/.aws/config`에만 저장한다. 이 단계가 성공하면 일상 작업에서 root 세션을 로그아웃한다. 운영 역할이나 MFA가 고장 난 경우에만 계정 root의 복구 절차를 사용하고 원인을 기록한다.
+첫 `aws sts get-caller-identity --profile aws-fullstack-operator`에서 TOTP 코드를 입력하면 AWS CLI가 역할 세션을 캐시한다. Terraform은 `mfa_serial` 프로필에서 MFA 코드를 입력받지 못해 `AssumeRoleTokenProvider session option not set` 오류를 내므로, 캐시된 세션을 `credential_process`로 넘기는 `aws-fullstack-operator-terraform` 프로필을 사용한다. 세션은 최대 1시간이며 만료되면 첫 명령부터 다시 실행한다. 두 `get-caller-identity`의 ARN은 `assumed-role/aws-fullstack-lab-bootstrap-operator/`로 시작해야 하고, 변경 없는 plan은 종료 코드 0이어야 한다. 현재 역할은 프로젝트 bootstrap 관리용이다. 운영 역할 자신과 운영 사용자, Budget을 바꾸는 bootstrap 변경은 이 역할의 권한 밖이므로 root 세션으로 적용하고 이 문서에 기록한다. 서비스 기반 적용은 계속 보호된 GitHub workflow에서 실행한다. 장기 액세스 키를 발급하거나 `aws configure export-credentials`의 출력을 로그·문서에 붙여 넣지 않는다. 로컬 프로필은 개인 기기의 `~/.aws/config`에만 저장한다. 이 단계가 성공하면 일상 작업에서 root 세션을 로그아웃한다. 운영 역할이나 MFA가 고장 난 경우에만 계정 root의 복구 절차를 사용하고 원인을 기록한다.
 
 AWS IAM Identity Center의 독립 계정용 account instance는 AWS 계정 접근용 permission set을 지원하지 않아 이 단일 계정의 사람 로그인 경로로 사용하지 않는다. [AWS Identity Center 인스턴스 비교](https://docs.aws.amazon.com/singlesignon/latest/userguide/identity-center-instances.html), [AWS CLI 역할·MFA 설정](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-role.html), [AWS CLI 임시 로그인](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sign-in.html)을 참고한다.
+
+## 7. GitHub 역할 권한 경계
+
+[Task 008](tasks/008-bootstrap-iam-boundary.md)은 GitHub OIDC plan·apply 역할에 관리형 정책 `aws-fullstack-lab-github-boundary`를 permissions boundary로 연결한다. boundary는 환경 state 경로의 S3 객체, state 버킷 목록, 서울 리전의 `ec2:*`·`ecr:*`만 허용한다. IAM·STS·bootstrap state는 포함하지 않는다. 역할 정책이 더 넓어져도 실제 권한은 역할 정책과 boundary의 교집합이다.
+
+운영 역할은 GitHub 역할의 정책·신뢰 정책을 계속 관리하지만 boundary 정책은 읽기만 한다. 역할의 boundary 제거와 다른 boundary로의 교체, boundary 없는 역할 재생성은 명시적으로 거부한다. 따라서 운영 역할이 GitHub 역할을 스스로 수임하도록 바꿔도 boundary 밖의 IAM·계정 권한은 얻지 못한다. boundary 변경은 운영 역할 권한 밖이므로 root 세션으로 적용하고 이 문서에 기록한다. 후속 Task가 ECS·ALB 등 새 서비스를 추가하면 boundary도 같은 PR에서 넓힌다.
+
+plan 역할은 `aws-fullstack-lab-<environment>-plan`으로 나뉘며 각 `*-plan` GitHub 환경의 OIDC subject만 신뢰한다. 적용 역할의 EC2 생성은 새 리소스에 `Environment=<environment>` 태그가 있을 때만, 서브넷·라우팅 테이블·보안 그룹 생성은 부모 VPC가 같은 환경일 때만 허용한다. 기존 리소스 변경·삭제와 태그 변경도 자기 환경 태그가 있을 때만 허용하며 `Environment` 태그를 다른 값으로 바꾸거나 제거하지 못한다. 보안 그룹 규칙은 태그가 없는 하위 리소스이므로 규칙 ARN은 조건 없이 허용하고 부모 보안 그룹의 태그를 검사한다.
+
+### PR merge 후 적용
+
+1. `main`에서 root 세션(`aws-fullstack-terraform`)과 계정을 확인한다. bootstrap 저장 plan이 **생성 6개(boundary 정책, 환경별 plan 역할·정책 각 2개, state lifecycle 규칙)·수정 5개(적용 역할 2개의 boundary 연결, 적용 역할 정책 2개, 운영 역할 정책)·삭제 3개(기존 `aws-fullstack-lab-plan` 역할과 정책 2개)**인지 확인한다. 적용 역할의 수정 속성이 `permissions_boundary`뿐인지도 확인한다. 범위가 다르면 중단한다.
+2. 저장 plan을 적용한다. 이 시점부터 기존 저장소 변수의 plan 역할이 없어지므로 곧바로 `preprod-plan`·`prod-plan` 환경 변수 `AWS_PLAN_ROLE_ARN`에 `terraform -chdir=infra/bootstrap output plan_role_arns`의 값을 등록하고 저장소 변수 `AWS_PLAN_ROLE_ARN`을 삭제한다.
+3. 운영 역할 프로필로 bootstrap plan이 변경 없음인지 확인한다. `Apply service foundation`을 `main`의 `preprod`로 실행해 `preprod-plan`·`preprod-apply` 두 단계 모두 변경 없음인지 확인한다. 변경 없는 apply로 boundary가 연결된 적용 역할의 수임·state 잠금·refresh를 검증한다.
+4. 적용 역할의 쓰기 권한은 다음 실제 변경(Task 010의 preprod 수정 또는 `prod` 최초 생성)에서 처음 사용된다. 권한 오류가 나면 해당 API의 리소스 유형과 태그 조건을 확인하고 PR로 고친다.
+
+되돌릴 때는 이전 `main` commit의 bootstrap 구성으로 저장 plan을 만들어 root 세션으로 적용하고, GitHub 변수를 이전 plan 역할 ARN으로 되돌린다.
 
 ## 비용 관리
 

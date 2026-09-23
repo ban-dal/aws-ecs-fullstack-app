@@ -4,9 +4,9 @@
 | --- | --- |
 | PR | [#7 · 운영자 MFA 자기 관리 권한 보완](https://github.com/ban-dal/aws-ecs-fullstack-app/pull/7) |
 | 작업 브랜치 | `fix/operator-mfa-management` |
-| 상태 | 진행 중 |
+| 상태 | 완료 |
 | 시작일 | 2026-09-24 |
-| 완료일·merge commit | PR merge 후 기록 |
+| 완료일·merge commit | 2026-09-24 KST · `5307e3357c8dcf3279cf626dec1631b83b8dba89` |
 
 ## 목표와 완료 기준
 
@@ -24,14 +24,16 @@ Task 006에서 만든 IAM 사용자가 패스키를 등록한 후 인증 앱(TOT
 
 1. [운영 가이드의 비루트 CLI 절차](../operations.md#6-비루트-운영-주체)를 따른다.
 2. PR merge 후 bootstrap 저장 plan에서 `aws_iam_user_policy.operator`, `aws_iam_role_policy.operator` 2개 수정, 생성·삭제 0개만 있는지 확인하고 적용한다.
-3. 사용자가 콘솔에서 이름 `aws-fullstack-lab-operator`의 자기 TOTP MFA를 추가한다. `mfa_serial`을 그 TOTP ARN으로 설정한 비루트 CLI 프로필로 역할 수임을 확인한다.
+3. 사용자가 콘솔에서 이름 `aws-fullstack-lab-operator`의 자기 TOTP MFA를 추가한다. `mfa_serial`을 그 TOTP ARN으로 설정한 비루트 CLI 프로필로 역할 수임을 확인한다. Terraform은 캐시된 역할 세션을 `credential_process`로 받는 `aws-fullstack-operator-terraform` 프로필로 실행한다.
 4. 비루트 역할로 bootstrap plan을 실행해 변경 없음(종료 코드 0)을 확인한다. 실패 시 root 세션은 유지하고 MFA 등록·역할 신뢰 정책·프로필을 순서대로 확인한다.
 
 ## 검증과 운영 영향
 
 - Terraform fmt·validate와 IAM 정책 diff가 통과했다. 2026-09-24 root 세션의 원격 bootstrap plan은 `aws_iam_user_policy.operator`, `aws_iam_role_policy.operator` 2개 수정, 생성·삭제 0개였다. PR merge 후 같은 범위를 재확인한다.
+- merge 후 `main`의 저장 plan도 같은 2개 수정이었고 root 세션으로 적용했다. 사후 plan은 변경 없음이었다.
+- 사용자가 TOTP 장치를 등록하고 역할을 수임했다. 운영 역할로 실행한 bootstrap plan은 변경 없음(종료 코드 0)이었다. 적용·검증 기록은 [운영 가이드](../operations.md#2026-09-24-task-007-적용과-비루트-검증-기록)에 있다.
 - IAM 정책 수정은 AWS 리소스 시간당 비용을 늘리지 않는다. S3 state 요청·버전은 기존 과금 범위다.
-- 사용자가 인증 앱을 등록할 때까지 root를 일상 운영에서 제거했다고 기록하지 않는다.
+- 비루트 경로 검증이 끝났으므로 root는 계정 복구 등 불가피한 경우와 운영 역할 자신을 바꾸는 bootstrap 적용에만 사용한다.
 
 ## 남은 사항과 다음 Task
 

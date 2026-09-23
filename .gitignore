@@ -14,5 +14,5 @@ dist/
 .terraform/
 *.tfvars
 !*.tfvars.example
-infra/bootstrap/backend.s3.tf
+*_override.tf
 .DS_Store

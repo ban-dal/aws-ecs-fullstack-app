@@ -25,7 +25,6 @@ jobs:
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository &&
       vars.TF_STATE_BUCKET != '' &&
-      vars.AWS_PLAN_ROLE_ARN != '' &&
       vars.AWS_ACCOUNT_ID != ''
     needs: validate
     runs-on: ubuntu-latest
@@ -47,6 +46,10 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: '1.14.0'
+      - name: Check environment plan role
+        env:
+          AWS_PLAN_ROLE_ARN: ${{ vars.AWS_PLAN_ROLE_ARN }}
+        run: test -n "$AWS_PLAN_ROLE_ARN"
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_PLAN_ROLE_ARN }}

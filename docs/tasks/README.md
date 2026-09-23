@@ -11,8 +11,9 @@
 | [003 · 서비스 기반 네트워크와 ECR](003-service-foundation.md) | 환경별 VPC·서브넷·보안 그룹·ECR 코드와 PR plan | [#3](https://github.com/ban-dal/aws-ecs-fullstack-app/pull/3) | 완료: 2026-09-23 merge |
 | [004 · 보호된 서비스 기반 적용 경로](004-protected-foundation-apply.md) | 환경별 OIDC 적용 역할·수동 승인 workflow | [#4](https://github.com/ban-dal/aws-ecs-fullstack-app/pull/4) | 완료: 2026-09-23 merge |
 | [005 · bootstrap IAM 및 preprod 기반 적용](005-preprod-foundation-apply.md) | 최초 IAM 반영·보호된 preprod 적용·실제 리소스 검증 | [#5](https://github.com/ban-dal/aws-ecs-fullstack-app/pull/5) | 완료: 2026-09-23 merge |
-| [006 · 비루트 운영 주체](006-nonroot-operator.md) | 사람의 AWS 운영 자격과 MFA 역할, 루트 사용 종료 절차 | [#6](https://github.com/ban-dal/aws-ecs-fullstack-app/pull/6) | 2026-09-24 merge·IAM 적용, CLI 검증 진행 중 |
-| [007 · 운영자 MFA 자기 관리](007-operator-mfa-management.md) | IAM 사용자 자신의 TOTP 등록·MFA 장치 관리 권한 보완 | [#7](https://github.com/ban-dal/aws-ecs-fullstack-app/pull/7) | 진행 중 |
+| [006 · 비루트 운영 주체](006-nonroot-operator.md) | 사람의 AWS 운영 자격과 MFA 역할, 루트 사용 종료 절차 | [#6](https://github.com/ban-dal/aws-ecs-fullstack-app/pull/6) | 완료: 2026-09-24 merge |
+| [007 · 운영자 MFA 자기 관리](007-operator-mfa-management.md) | IAM 사용자 자신의 TOTP 등록·MFA 장치 관리 권한 보완 | [#7](https://github.com/ban-dal/aws-ecs-fullstack-app/pull/7) | 완료: 2026-09-24 merge |
+| [008 · bootstrap IAM 권한 경계](008-bootstrap-iam-boundary.md) | GitHub 역할 권한 경계·환경별 역할 격리·bootstrap 운영 정리 | [#8](https://github.com/ban-dal/aws-ecs-fullstack-app/pull/8) | 진행 중 |
 
 ## 작성 흐름
 

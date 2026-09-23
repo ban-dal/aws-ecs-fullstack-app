@@ -1,3 +1,26 @@
+locals {
+  environments = toset(["preprod", "prod"])
+  account_id   = data.aws_caller_identity.current.account_id
+
+  web_repository_arns = {
+    for environment in local.environments :
+    environment => "arn:aws:ecr:${var.aws_region}:${local.account_id}:repository/aws-fullstack-lab-${environment}-web"
+  }
+
+  foundation_read_actions = [
+    "ec2:DescribeAvailabilityZones",
+    "ec2:DescribeInternetGateways",
+    "ec2:DescribeNetworkInterfaces",
+    "ec2:DescribeRouteTables",
+    "ec2:DescribeSecurityGroupRules",
+    "ec2:DescribeSecurityGroups",
+    "ec2:DescribeSubnets",
+    "ec2:DescribeTags",
+    "ec2:DescribeVpcAttribute",
+    "ec2:DescribeVpcs",
+  ]
+}
+
 resource "aws_s3_bucket" "state" {
   bucket        = var.state_bucket_name
   force_destroy = false
@@ -25,6 +48,28 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "state" {
       sse_algorithm = "AES256"
     }
   }
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "state" {
+  bucket = aws_s3_bucket.state.id
+
+  rule {
+    id     = "expire-old-state-versions"
+    status = "Enabled"
+
+    filter {}
+
+    noncurrent_version_expiration {
+      noncurrent_days           = 90
+      newer_noncurrent_versions = 10
+    }
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+  }
+
+  depends_on = [aws_s3_bucket_versioning.state]
 }
 
 resource "aws_s3_bucket_public_access_block" "state" {
@@ -67,6 +112,8 @@ resource "aws_iam_openid_connect_provider" "github" {
 }
 
 data "aws_iam_policy_document" "plan_assume" {
+  for_each = local.environments
+
   statement {
     actions = ["sts:AssumeRoleWithWebIdentity"]
 
@@ -84,20 +131,31 @@ data "aws_iam_policy_document" "plan_assume" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values = [
-        for environment in ["preprod-plan", "prod-plan"] :
-        "${var.github_repository_subject}:environment:${environment}"
-      ]
+      values   = ["${var.github_repository_subject}:environment:${each.key}-plan"]
     }
   }
 }
 
 resource "aws_iam_role" "plan" {
-  name               = "aws-fullstack-lab-plan"
-  assume_role_policy = data.aws_iam_policy_document.plan_assume.json
+  for_each = local.environments
+
+  name                 = "aws-fullstack-lab-${each.key}-plan"
+  assume_role_policy   = data.aws_iam_policy_document.plan_assume[each.key].json
+  permissions_boundary = local.github_boundary_arn
+  max_session_duration = 3600
+
+  tags = {
+    Project     = "aws-fullstack-lab"
+    Environment = each.key
+    Purpose     = "terraform-plan"
+  }
+
+  depends_on = [aws_iam_policy.github_boundary]
 }
 
-data "aws_iam_policy_document" "state_plan" {
+data "aws_iam_policy_document" "plan" {
+  for_each = local.environments
+
   statement {
     sid       = "ListStateBucket"
     actions   = ["s3:ListBucket"]
@@ -105,55 +163,46 @@ data "aws_iam_policy_document" "state_plan" {
   }
 
   statement {
-    sid     = "ReadEnvironmentState"
-    actions = ["s3:GetObject"]
-    resources = [
-      for environment in ["preprod", "prod"] :
-      "${aws_s3_bucket.state.arn}/${environment}/terraform.tfstate"
-    ]
+    sid       = "ReadOwnState"
+    actions   = ["s3:GetObject"]
+    resources = ["${aws_s3_bucket.state.arn}/${each.key}/terraform.tfstate"]
   }
 
   statement {
-    sid     = "LockEnvironmentState"
-    actions = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
-    resources = [
-      for environment in ["preprod", "prod"] :
-      "${aws_s3_bucket.state.arn}/${environment}/terraform.tfstate.tflock"
-    ]
+    sid       = "LockOwnState"
+    actions   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
+    resources = ["${aws_s3_bucket.state.arn}/${each.key}/terraform.tfstate.tflock"]
   }
-}
 
-resource "aws_iam_role_policy" "state_plan" {
-  name   = "terraform-state-lock"
-  role   = aws_iam_role.plan.name
-  policy = data.aws_iam_policy_document.state_plan.json
-}
-
-data "aws_iam_policy_document" "foundation_plan_read" {
   statement {
-    sid       = "ReadVpcFoundation"
-    actions   = ["ec2:DescribeVpcs", "ec2:DescribeVpcAttribute", "ec2:DescribeSubnets", "ec2:DescribeInternetGateways", "ec2:DescribeRouteTables", "ec2:DescribeSecurityGroups", "ec2:DescribeSecurityGroupRules", "ec2:DescribeNetworkInterfaces", "ec2:DescribeTags"]
+    sid       = "ReadFoundationNetwork"
+    actions   = local.foundation_read_actions
     resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:RequestedRegion"
+      values   = [var.aws_region]
+    }
   }
 
   statement {
-    sid = "ReadEnvironmentRepositories"
+    sid = "ReadOwnRepository"
     actions = [
       "ecr:DescribeRepositories",
       "ecr:GetLifecyclePolicy",
       "ecr:ListTagsForResource",
     ]
-    resources = [
-      for environment in ["preprod", "prod"] :
-      "arn:aws:ecr:${var.aws_region}:${data.aws_caller_identity.current.account_id}:repository/aws-fullstack-lab-${environment}-web"
-    ]
+    resources = [local.web_repository_arns[each.key]]
   }
 }
 
-resource "aws_iam_role_policy" "foundation_plan_read" {
-  name   = "terraform-foundation-read"
-  role   = aws_iam_role.plan.name
-  policy = data.aws_iam_policy_document.foundation_plan_read.json
+resource "aws_iam_role_policy" "plan" {
+  for_each = local.environments
+
+  name   = "terraform-plan-read"
+  role   = aws_iam_role.plan[each.key].name
+  policy = data.aws_iam_policy_document.plan[each.key].json
 }
 
 resource "aws_budgets_budget" "monthly" {
@@ -189,8 +238,8 @@ output "state_bucket" {
   value = aws_s3_bucket.state.bucket
 }
 
-output "plan_role_arn" {
-  value = aws_iam_role.plan.arn
+output "plan_role_arns" {
+  value = { for environment, role in aws_iam_role.plan : environment => role.arn }
 }
 
 output "aws_account_id" {

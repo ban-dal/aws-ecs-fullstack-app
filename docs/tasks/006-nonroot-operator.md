@@ -4,7 +4,7 @@
 | --- | --- |
 | PR | [#6 · 비루트 bootstrap 운영 주체 준비](https://github.com/ban-dal/aws-ecs-fullstack-app/pull/6) |
 | 작업 브랜치 | `feat/nonroot-operator` |
-| 상태 | PR merge·IAM 적용 완료, CLI 역할 수임 검증 진행 중 |
+| 상태 | 완료 (CLI 역할 수임은 Task 007에서 검증) |
 | 시작일 | 2026-09-23 |
 | 완료일·merge commit | 2026-09-24 KST · `ffffc4b7dd90d10922c6d2d051f95c956d1816e7` |
 
