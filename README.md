@@ -1,6 +1,6 @@
 # AWS 풀스택 실험실
 
-Next.js 앱과 AWS 인프라를 한 저장소에서 관리하는 프로젝트다. 앱과 문서에 더해 Terraform state·GitHub OIDC·PR plan의 코드가 준비되어 있다. AWS bootstrap과 서비스 배포는 아직 실행하지 않았다.
+Next.js 앱과 AWS 인프라를 한 저장소에서 관리하는 프로젝트다. Terraform state 버킷·GitHub OIDC plan 역할·비용 Budget의 bootstrap은 적용했으며, 서비스 배포와 GitHub PR plan 설정은 아직 진행 중이다.
 
 ## 구성
 
@@ -27,7 +27,7 @@ pnpm dev
 
 ## 다음 단계
 
-1. [운영 절차](docs/operations.md)에 따라 AWS bootstrap을 적용하고 state를 S3로 이전한다. GitHub plan 환경과 저장소 변수를 설정한다.
+1. [운영 절차](docs/operations.md)에 따라 GitHub plan 환경과 저장소 변수를 설정한다.
 2. VPC, 서브넷, 보안 그룹, ECR, ECS/EC2, ALB, ACM, Route 53, S3, Lambda를 비용 선택지와 함께 구현한다.
 3. 후속 PR에서 리뷰·merge 후 preprod `apply`, 수동 승인 후 prod `apply`를 연결한다.
 
@@ -40,4 +40,4 @@ pnpm dev
 
 ## 비용과 현재 상태
 
-2026년 9월 기준 새 AWS Free plan은 크레딧과 기간 제한이 있다. ALB, Route 53 호스팅 영역·도메인, 퍼블릭 IPv4, NAT Gateway 등은 사용량 또는 시간에 따라 과금될 수 있다. 이번 Terraform 구성은 아직 AWS에 적용되지 않았다. 정확한 금액은 계정 생성일, 리전, 사용량에 따라 확인해야 한다.
+2026년 9월 기준 새 AWS Free plan은 크레딧과 기간 제한이 있다. 현재 적용된 bootstrap의 S3 저장량과 요청은 사용량에 따라 과금될 수 있다. ALB, Route 53 호스팅 영역·도메인, 퍼블릭 IPv4, NAT Gateway 등은 아직 생성하지 않았으며 사용량 또는 시간에 따라 과금될 수 있다. 정확한 금액은 계정 생성일, 리전, 사용량에 따라 확인해야 한다.

@@ -1,6 +1,6 @@
 # 운영 가이드
 
-Terraform bootstrap과 PR plan 코드가 준비되었다. 현재 AWS에는 적용하지 않았다. 아래 단계에서 AWS 리소스를 실제 생성하는 명령은 운영자가 계정과 비용을 확인한 후 실행한다.
+Terraform bootstrap은 2026-09-23에 적용했고 state를 S3로 이전했다. GitHub PR plan 환경과 저장소 변수는 아직 설정하지 않았다. 아래 bootstrap 명령은 새 계정에서 재현할 때 참고하며, 현재 계정에서는 원격 state를 연결한 뒤 plan으로 상태를 확인한다.
 
 ## 선행 준비
 
@@ -16,10 +16,13 @@ aws --version
 aws configure set region ap-northeast-2 --profile aws-fullstack-bootstrap
 aws login --profile aws-fullstack-bootstrap
 aws sts get-caller-identity --profile aws-fullstack-bootstrap
-export AWS_PROFILE=aws-fullstack-bootstrap
+aws configure set credential_process 'aws configure export-credentials --profile aws-fullstack-bootstrap --format process' --profile aws-fullstack-terraform
+aws configure set region ap-northeast-2 --profile aws-fullstack-terraform
+export AWS_PROFILE=aws-fullstack-terraform
+aws sts get-caller-identity
 ```
 
-SSO를 쓰는 계정에서는 `aws login` 대신 `aws configure sso --profile aws-fullstack-bootstrap`과 `aws sso login --profile aws-fullstack-bootstrap`을 실행한다. `AWS_PROFILE` 환경 변수를 설정한 셸에서 아래 Terraform 명령을 실행해야 AWS provider와 S3 backend가 같은 프로필을 사용한다. 콘솔 로그인에 필요한 IAM 권한과 설정은 [AWS CLI 로그인 안내](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sign-in.html)를 따른다.
+SSO를 쓰는 계정에서는 `aws login` 대신 `aws configure sso --profile aws-fullstack-bootstrap`과 `aws sso login --profile aws-fullstack-bootstrap`을 실행한다. Terraform의 S3 backend가 `aws login` 프로필을 직접 읽지 못하는 경우 `credential_process` 프로필로 AWS CLI의 임시 자격 증명을 공유한다. `AWS_PROFILE`은 Terraform 명령을 실행하는 셸에 설정해야 하며 Codex 데스크톱 앱은 별도 실행 환경이므로 터미널의 `export`를 자동으로 상속하지 않는다. Codex 샌드박스에서 로그인 캐시 접근이 차단되면 AWS 명령에 샌드박스 밖 실행 권한이 필요하다. 인증 파일을 저장소로 복사하지 않는다. 세션이 만료되면 `aws login --profile aws-fullstack-bootstrap`을 다시 실행한다. [AWS CLI 로그인 안내](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sign-in.html)와 [S3 backend 인증](https://developer.hashicorp.com/terraform/language/backend/s3)을 참고한다.
 
 ## 1. Bootstrap
 
@@ -33,7 +36,7 @@ terraform -chdir=infra/bootstrap plan -var-file=terraform.tfvars
 terraform -chdir=infra/bootstrap apply -var-file=terraform.tfvars
 ```
 
-첫 apply는 로컬 state를 만든다. 이후 `infra/bootstrap/backend.s3.tf.example`을 `backend.s3.tf`로 복사하고, 같은 버킷의 `bootstrap/terraform.tfstate`로 이전한다. 이전과 S3 버전 확인이 끝날 때까지 로컬 state를 안전하게 보관한다. `backend.s3.tf`와 `.tfvars`는 Git에서 제외한다.
+첫 apply는 로컬 state를 만든다. 이후 `infra/bootstrap/backend.s3.tf.example`을 `backend.s3.tf`로 복사하고, 같은 버킷의 `bootstrap/terraform.tfstate`로 이전한다. 이전과 S3 버전 확인이 끝날 때까지 로컬 state를 안전하게 보관한다. `backend.s3.tf`, `.tfvars`, state는 Git에서 제외한다. 기존 계정에서는 새로 apply하지 말고 먼저 원격 backend를 연결한다.
 
 ```bash
 cp infra/bootstrap/backend.s3.tf.example infra/bootstrap/backend.s3.tf
@@ -45,6 +48,12 @@ terraform -chdir=infra/bootstrap output
 ```
 
 계정에 `token.actions.githubusercontent.com` OIDC provider가 이미 있으면 중복 생성 전에 해당 리소스를 import한다. bootstrap state 버킷은 `force_destroy=false`이므로 실수로 state 전체를 지우는 동작을 막는다.
+
+### 2026-09-23 실행 기록
+
+- 계정 `065768154598`, 리전 `ap-northeast-2`에 S3 state 버킷 `aws-ecs-fullstack-app`, GitHub OIDC provider와 plan 역할, 월 $5 비용 Budget을 생성했다. Terraform 결과는 9개 생성, 변경·삭제 0개였다.
+- 로컬 state를 `s3://aws-ecs-fullstack-app/bootstrap/terraform.tfstate`로 이전했다. 객체 버전 ID가 생성되고 버킷 버전 관리·공개 접근 차단이 활성화된 것을 확인했다. 이전 후 `terraform plan -detailed-exitcode`는 변경 없음(종료 코드 0)이었다.
+- 당시 AWS 인증 주체는 계정 root였다. 후속 운영에는 권한을 제한한 IAM 주체를 사용한다. GitHub 환경 보호 규칙과 저장소 변수는 2단계에서 설정해야 한다.
 
 ## 2. GitHub 설정
 

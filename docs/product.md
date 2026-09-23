@@ -21,7 +21,7 @@ AI를 활용해 기획, 디자인, 개발, 인프라와 운영을 하나의 저�
 ## Terraform 기반 Task 범위
 
 - 원격 state 버킷, GitHub OIDC plan 역할, 선택형 비용 Budget의 Terraform 코드.
-- PR의 fmt·validate와 AWS bootstrap 이후 `preprod`·`prod` plan. 이번 Task에서는 AWS apply를 실행하지 않는다.
+- PR의 fmt·validate와 GitHub 환경 설정 이후 `preprod`·`prod` plan. 2026-09-23에 bootstrap의 AWS apply와 S3 state 이전을 완료했다. 앱 서비스 apply는 아직 실행하지 않았다.
 
 ## 후속 구현 범위
 

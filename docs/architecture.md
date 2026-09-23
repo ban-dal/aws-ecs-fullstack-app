@@ -1,6 +1,6 @@
 # 아키텍처
 
-> 아래 앱 서비스 구조는 목표 아키텍처다. 현재 구현된 Terraform은 state 버킷·OIDC·비용 Budget의 bootstrap과 환경별 PR plan까지만 포함한다. AWS에는 아직 적용하지 않았다.
+> 아래 앱 서비스 구조는 목표 아키텍처다. state 버킷·OIDC·비용 Budget의 bootstrap은 AWS에 적용했고, 환경별 PR plan 코드가 준비되어 있다. 앱 서비스 리소스는 아직 적용하지 않았다.
 
 ```mermaid
 flowchart LR
