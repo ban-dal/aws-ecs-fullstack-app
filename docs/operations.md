@@ -65,11 +65,11 @@ GitHub 환경 `preprod-plan`, `prod-plan`을 만들고 승인 규칙을 설정�
 
 2026-09-23에 `preprod-plan`·`prod-plan` 환경에 `ban-dal` 필수 수동 승인자를 설정하고 자기 환경 승인(`prevent_self_review=false`)을 허용했다. 이후 bootstrap output과 대조한 네 저장소 변수를 등록하고 읽어 확인했다. [PR #2 실행](https://github.com/ban-dal/aws-ecs-fullstack-app/actions/runs/35823513637)에서 두 환경 작업을 각각 승인했고, OIDC 인증·S3 backend 초기화·예상 계정 확인·plan 성공을 확인했다. 두 plan은 `plan_identity` 출력값 추가만 표시했으며 실제 인프라 변경은 없었다.
 
-현재 AWS에 적용된 OIDC 역할은 환경별 `preprod/terraform.tfstate`, `prod/terraform.tfstate` 읽기와 잠금 파일 작업에만 접근한다. GitHub Actions는 장기 AWS 키를 저장하지 않는다. Task 003에서 서비스 기반 리소스 refresh용 VPC·ECR 읽기 정책을 코드에 추가했다. bootstrap을 승인된 경로로 적용하기 전에는 실제 역할 권한이 바뀌지 않는다.
+GitHub Actions는 장기 AWS 키를 저장하지 않는다. plan 역할은 환경별 state 읽기와 잠금 파일 작업, 서비스 기반 VPC·ECR refresh용 읽기 권한을 갖는다. Task 005에서 해당 읽기 정책을 AWS에 적용했다. state 객체 쓰기 권한은 plan 역할에 없다.
 
 ## 3. 배포와 확인
 
-현재 PR은 앱 타입 검사·빌드와 Terraform fmt·validate를 실행한다. 같은 저장소 PR에서는 `preprod`·`prod` 원격 state plan을 실행한다. Task 003의 `infra/plan`은 계정 식별 후 `infra/live` 서비스 기반 모듈을 plan한다. `terraform plan`은 AWS 리소스를 만들지 않는다. Task 004의 보호된 apply workflow는 `main`에 merge된 뒤 수동 실행할 수 있다.
+현재 PR은 앱 타입 검사·빌드와 Terraform fmt·validate를 실행한다. 같은 저장소 PR에서는 `preprod`·`prod` 원격 state plan을 실행한다. Task 003의 `infra/plan`은 계정 식별 후 `infra/live` 서비스 기반 모듈을 plan한다. `terraform plan`은 AWS 리소스를 만들지 않는다. Task 004의 보호된 apply workflow는 merge된 `main`에서만 수동 실행할 수 있다.
 
 향후 앱 배포 후에는 도메인과 `/api/health`, ECS 서비스 이벤트, CloudWatch 로그, ALB target health, ACM 검증 CNAME을 확인한다.
 
@@ -91,7 +91,9 @@ terraform -chdir=infra/plan init -reconfigure -input=false \
 terraform -chdir=infra/plan plan -input=false -var="environment=preprod"
 ```
 
-Task 003은 코드와 PR plan까지만 진행했다. 첫 실제 적용 전에는 plan 역할의 VPC·ECR 읽기 정책과 Task 004의 적용 역할을 포함한 `infra/bootstrap` 변경을 승인된 초기 권한 절차로 적용한다. 그 뒤 보호된 `preprod` apply를 실행하고, `prod`는 preprod 결과를 확인한 뒤 별도 환경 승인으로 적용한다. 현재 GitHub PR CI에서는 apply하지 않는다.
+Task 003은 코드와 PR plan까지만 진행했다. Task 005에서 plan 역할의 VPC·ECR 읽기 정책과 환경별 적용 역할을 포함한 `infra/bootstrap` 변경을 승인받아 적용했다. 보호된 `preprod` apply도 완료해 결과를 확인했다. `prod`는 별도 결정과 환경 승인으로 적용한다. GitHub PR CI에서는 apply하지 않는다.
+
+2026-09-23 [preprod 적용 실행 35853428651](https://github.com/ban-dal/aws-ecs-fullstack-app/actions/runs/35853428651)은 plan·apply 단계에서 모두 계정 `065768154598`을 확인하고, 기반 리소스 **17개 생성·변경 0개·삭제 0개**로 성공했다. VPC `vpc-0fb4b83dae7ac8bc2`의 네 서브넷은 `ap-northeast-2a`와 `ap-northeast-2c`에 분산되며 퍼블릭 IP 자동 할당은 모두 꺼져 있다. 공개 라우트만 Internet Gateway로 향한다. ECR `aws-fullstack-lab-preprod-web`은 빈 저장소로 생성됐다. 사후 preprod plan은 변경 없음이다. prod state의 plan은 여전히 17개 생성만 표시하며 prod는 미적용 상태다.
 
 VPC와 Internet Gateway 자체에는 추가 요금이 없지만, ECR에 이미지를 넣으면 저장량·데이터 전송량에 따라 비용이 생긴다. 새 고객의 ECR 프라이빗 저장소에는 월 500 MB 저장 공간의 무료 이용 범위가 안내되어 있으나 실제 계정 자격과 초과 사용량을 확인해야 한다. 퍼블릭 IPv4는 생성하지 않았으며 나중에 할당하면 시간당 요금이 발생한다. [VPC FAQ](https://aws.amazon.com/vpc/faqs/), [Internet Gateway 안내](https://docs.aws.amazon.com/vpc/latest/userguide/VPC_Internet_Gateway.html), [ECR 요금](https://aws.amazon.com/ecr/pricing/), [VPC 요금](https://aws.amazon.com/vpc/pricing/)을 참고한다.
 
@@ -101,13 +103,13 @@ VPC와 Internet Gateway 자체에는 추가 요금이 없지만, ECR에 이미�
 
 [Task 004](tasks/004-protected-foundation-apply.md)는 `preprod-apply`, `prod-apply` GitHub 환경과 환경별 OIDC 역할, [수동 적용 workflow](../.github/workflows/apply-foundation.yml)를 준비한다. 환경은 `main` 브랜치만 허용하고 `ban-dal` 수동 승인을 요구한다. 사용자가 선택한 1인 운영 정책으로 자기 승인은 허용하지만 독립 검토자는 없다. 기존 `preprod-plan`, `prod-plan` 승인과 적용 승인은 서로 다른 작업이다.
 
-2026-09-23에 두 적용 환경을 설정하고 API로 다시 확인했다. `prevent_self_review=false`, 필수 승인자 `ban-dal`, 배포 가능한 브랜치 패턴은 `main` 하나다. 각 환경의 `AWS_APPLY_ROLE_ARN`은 `arn:aws:iam::065768154598:role/aws-fullstack-lab-<environment>-apply` 형식으로 등록했다. 역할은 아직 AWS에 없으므로 ARN 변수 등록만으로 배포할 수 없다. 다른 계정에서 재구성할 때는 계정 ID와 GitHub 사용자 ID를 새 값으로 바꾼다. [GitHub 환경 API](https://docs.github.com/en/rest/deployments/environments)와 [브랜치 정책 API](https://docs.github.com/en/rest/deployments/branch-policies)를 참고한다.
+2026-09-23에 두 적용 환경을 설정하고 API로 다시 확인했다. `prevent_self_review=false`, 필수 승인자 `ban-dal`, 배포 가능한 브랜치 패턴은 `main` 하나다. 각 환경의 `AWS_APPLY_ROLE_ARN`은 `arn:aws:iam::065768154598:role/aws-fullstack-lab-<environment>-apply` 형식으로 등록했다. Task 005에서 역할을 AWS에 생성하고 두 환경 변수와 실제 역할 ARN이 일치하는지 확인했다. 다른 계정에서 재구성할 때는 계정 ID와 GitHub 사용자 ID를 새 값으로 바꾼다. [GitHub 환경 API](https://docs.github.com/en/rest/deployments/environments)와 [브랜치 정책 API](https://docs.github.com/en/rest/deployments/branch-policies)를 참고한다.
 
 workflow는 `main`에서 수동으로 `preprod` 또는 `prod` 하나를 선택해 실행한다. 먼저 해당 `*-plan` 환경을 승인하고 로그의 변경을 확인한다. 이어 `*-apply` 환경을 승인하면 새 plan을 만들어 검사한 뒤 그 plan을 적용한다. 현재 안전장치는 `module.service_foundation` 안에서 최대 17개 **신규 생성**만 허용한다. 변경·교체·삭제나 다른 모듈의 변경은 실패한다. plan 파일과 JSON은 runner 임시 디렉터리에서만 사용하며 artifact로 올리지 않는다. merge만으로 배포가 시작되지 않는다.
 
 ### 최초 IAM 권한 준비
 
-적용 역할은 Terraform 코드에만 있으며 아직 AWS에 존재하지 않는다. 따라서 첫 역할 생성에 적용 workflow를 사용할 수 없다. Task 004 PR이 검토·merge된 뒤, 기존 관리자 자격 증명으로 bootstrap state에 한 번 적용하는 예외가 필요하다. 이 예외는 서비스 리소스를 만들지 않는다. 계정과 `main` commit을 확인하고, `terraform plan`에서 `foundation_plan_read` 정책 1개와 환경별 적용 역할·정책 각 2개, 총 **5개 생성·변경 0개·삭제 0개**인지 재확인한다. 결과가 다르면 진행하지 않는다.
+새 계정에서 적용 역할을 처음 생성할 때는 아직 workflow를 사용할 수 없다. Task 004 PR을 검토·merge한 뒤, 기존 관리자 자격 증명으로 bootstrap state에 한 번 적용하는 예외가 필요하다. 이 예외는 서비스 리소스를 만들지 않는다. 계정과 `main` commit을 확인하고, `terraform plan`에서 `foundation_plan_read` 정책 1개와 환경별 적용 역할·정책 각 2개, 총 **5개 생성·변경 0개·삭제 0개**인지 재확인한다. 결과가 다르면 진행하지 않는다.
 
 ```bash
 test "$(git branch --show-current)" = "main"
@@ -132,6 +134,14 @@ terraform -chdir=infra/bootstrap output foundation_apply_role_arns
 
 `backend.s3.tf`, `terraform.tfvars`, plan 파일과 자격 증명을 커밋하지 않는다. 실제 적용 뒤에는 실행자, 날짜, commit, plan·apply 결과와 두 IAM 역할 ARN을 이 문서 또는 다음 Task에 기록한다. 기존 관리자 자격 증명을 계속 배포에 사용하지 않는다. [Terraform 저장 plan](https://developer.hashicorp.com/terraform/tutorials/cli/plan)에는 민감한 데이터가 들어갈 수 있으므로 임시 디렉터리에서만 사용한다.
 
+#### 2026-09-23 최초 IAM 적용 기록
+
+- 실행자: Codex가 사용자의 승인 후 `aws-fullstack-terraform` 프로필로 실행했다. AWS 호출 주체는 계정 `065768154598`의 root 임시 세션이었다.
+- 코드: PR #4 merge commit `3d4ec05fb97b7ad361fe608e93122686c727ea9a`의 `main`. 원격 state: `s3://aws-ecs-fullstack-app/bootstrap/terraform.tfstate`.
+- 저장 plan: 환경별 적용 역할 2개, 역할 정책 2개, plan 읽기 정책 1개 생성. 변경·삭제 0개. `terraform apply`도 5개 생성, 변경·삭제 0개였다.
+- 사후 `terraform plan -detailed-exitcode`는 종료 코드 0으로 변경 없음이었다. `foundation_apply_role_arns`의 두 ARN을 GitHub 적용 환경 변수와 대조했다. 저장 plan은 확인 후 임시 디렉터리에서 삭제했다.
+- 이 단계에서 VPC·ECR 등 서비스 기반은 생성하지 않았다. [Task 005](tasks/005-preprod-foundation-apply.md)에 이어지는 `preprod` 실행을 기록한다.
+
 ### 환경별 서비스 기반 적용
 
 bootstrap 적용 후 `foundation_apply_role_arns`의 `preprod`·`prod` 값을 각 GitHub 적용 환경의 `AWS_APPLY_ROLE_ARN` 변수와 대조한다. `TF_STATE_BUCKET`, `AWS_ACCOUNT_ID`, `AWS_REGION`, `AWS_PLAN_ROLE_ARN`은 기존 저장소 변수를 사용한다. 장기 AWS 키는 등록하지 않는다.
@@ -139,6 +149,8 @@ bootstrap 적용 후 `foundation_apply_role_arns`의 `preprod`·`prod` 값을 �
 1. GitHub Actions에서 `Apply service foundation`을 `main`의 `preprod`로 수동 실행한다. `preprod-plan` 승인 후 plan 결과와 예상 계정을 확인하고, `preprod-apply`를 승인한다.
 2. 적용 로그, `preprod/terraform.tfstate`, VPC·서브넷·보안 그룹·ECR 존재를 확인한다. 이 workflow는 공개 앱이나 EC2·ALB를 만들지 않는다.
 3. 비용과 preprod 결과를 검토한 뒤에만 `prod`를 별도 실행한다. `prod-plan`, `prod-apply`도 각각 승인한다.
+
+2026-09-23에 1·2단계를 실행했다. 두 환경 승인 후 같은 저장 plan의 17개 신규 생성 검사가 통과했고 apply는 17개 생성으로 끝났다. S3 preprod state 객체의 버전과 AES256 암호화, VPC·라우팅·보안 그룹·ECR 설정을 AWS API로 확인했다. VPC에는 NAT Gateway·EC2·ALB가 없다. 실행 세부 내용은 [Task 005](tasks/005-preprod-foundation-apply.md)에 기록했다. 3단계 prod 적용은 아직 진행하지 않았다.
 
 두 환경은 서로 다른 state key와 ECR 이름·VPC CIDR을 사용한다. 적용 역할의 S3 state 쓰기 권한도 환경별 key로 나뉜다. 다만 EC2 네트워크 생성·삭제 API 권한은 서울 리전으로 제한할 뿐 환경별 리소스 ID까지 묶지 못했다. 한 AWS 계정을 공유하는 한 실수에 대한 완전한 환경 격리는 아니다. 이 workflow에는 destroy 경로가 없으며 종료 시에는 별도 검토된 절차를 만든다.
 

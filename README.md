@@ -1,6 +1,6 @@
 # AWS 풀스택 실험실
 
-Next.js 앱과 AWS 인프라를 한 저장소에서 관리하는 프로젝트다. Terraform bootstrap과 GitHub 환경별 PR plan을 구성했다. Task 003에서 서비스 기반 네트워크와 ECR 코드를 준비했고, Task 004에서 수동 승인 적용 경로를 구성한다. 서비스 리소스와 앱 배포는 아직 AWS에 적용하지 않았다.
+Next.js 앱과 AWS 인프라를 한 저장소에서 관리하는 프로젝트다. Terraform bootstrap과 GitHub 환경별 PR plan을 구성했다. Task 003에서 서비스 기반 네트워크와 ECR 코드를 준비했고, Task 004에서 수동 승인 적용 경로를 구성했다. Task 005에서 IAM 역할과 `preprod` 서비스 기반을 AWS에 적용했다. 앱 배포와 `prod` 기반 적용은 아직 진행하지 않았다.
 
 ## 구성
 
@@ -29,8 +29,8 @@ pnpm dev
 
 ## 다음 단계
 
-1. [Task 004](docs/tasks/004-protected-foundation-apply.md)의 적용 역할·환경 보호 규칙·workflow를 검토한다.
-2. PR merge 후 최초 bootstrap IAM 변경을 별도 승인·적용하고, preprod 기반을 확인한 뒤 prod 적용을 결정한다.
+1. [Task 005](docs/tasks/005-preprod-foundation-apply.md)의 적용 결과와 비용·재구성 기록을 검토한다.
+2. `preprod` 결과를 기준으로 `prod` 적용을 별도로 결정한다.
 3. ECS/EC2, ALB, ACM, Route 53, S3, Lambda를 비용 선택지와 함께 추가한다. 공개 앱은 기본적으로 끈다.
 
 ## 문서
@@ -43,4 +43,4 @@ pnpm dev
 
 ## 비용과 현재 상태
 
-2026년 9월 기준 새 AWS Free plan은 크레딧과 기간 제한이 있다. 현재 적용된 bootstrap의 S3 저장량과 요청은 사용량에 따라 과금될 수 있다. Task 003의 네트워크·ECR 코드는 아직 AWS에 적용하지 않았다. ALB, Route 53 호스팅 영역·도메인, 퍼블릭 IPv4, NAT Gateway 등도 생성하지 않았으며 사용량 또는 시간에 따라 과금될 수 있다. 정확한 금액은 계정 생성일, 리전, 사용량에 따라 확인해야 한다.
+2026년 9월 기준 새 AWS Free plan은 크레딧과 기간 제한이 있다. bootstrap과 `preprod`의 S3 state 저장량·요청, 이후 ECR 이미지 저장·전송은 사용량에 따라 과금될 수 있다. `preprod` VPC·서브넷·보안 그룹·빈 ECR은 적용했다. ALB, Route 53 호스팅 영역·도메인, 퍼블릭 IPv4, NAT Gateway, EC2는 생성하지 않았다. 정확한 금액은 계정 생성일, 리전, 사용량에 따라 확인해야 한다.
