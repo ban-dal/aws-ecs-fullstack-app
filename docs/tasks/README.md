@@ -7,7 +7,8 @@
 | Task | 목표 | PR | 상태 |
 | --- | --- | --- | --- |
 | [001 · Terraform 기반과 PR 검증](001-terraform-foundation.md) | S3 state·OIDC·Budget·환경별 plan 기반 | [#1](https://github.com/ban-dal/aws-ecs-fullstack-app/pull/1) | 완료: 2026-09-23 merge |
-| [002 · GitHub PR plan 환경 구성](002-github-pr-plan-setup.md) | 환경 보호·저장소 변수·실제 plan 검증 | [#2](https://github.com/ban-dal/aws-ecs-fullstack-app/pull/2) | 진행 중: plan 검증 완료, merge 대기 |
+| [002 · GitHub PR plan 환경 구성](002-github-pr-plan-setup.md) | 환경 보호·저장소 변수·실제 plan 검증 | [#2](https://github.com/ban-dal/aws-ecs-fullstack-app/pull/2) | 완료: 2026-09-23 merge |
+| [003 · 서비스 기반 네트워크와 ECR](003-service-foundation.md) | 환경별 VPC·서브넷·보안 그룹·ECR 코드와 PR plan | [#3](https://github.com/ban-dal/aws-ecs-fullstack-app/pull/3) | 진행 중: plan 검증 완료, merge 대기 |
 
 ## 작성 흐름
 
