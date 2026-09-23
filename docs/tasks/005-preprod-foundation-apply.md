@@ -2,7 +2,7 @@
 
 | 항목 | 값 |
 | --- | --- |
-| PR | 생성 후 링크 입력 |
+| PR | [#5 · bootstrap IAM 및 preprod 기반 적용 기록](https://github.com/ban-dal/aws-ecs-fullstack-app/pull/5) |
 | 작업 브랜치 | `feat/preprod-foundation-apply` |
 | 상태 | 진행 중: IAM·preprod 적용과 사후 검증 완료, PR 검토 대기 |
 | 시작일 | 2026-09-23 |
