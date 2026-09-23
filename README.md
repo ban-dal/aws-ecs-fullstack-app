@@ -1,6 +1,6 @@
 # AWS 풀스택 실험실
 
-Next.js 앱과 AWS 인프라를 한 저장소에서 관리하는 프로젝트다. Terraform bootstrap과 GitHub 환경별 PR plan을 구성했다. Task 005에서 IAM 역할과 `preprod` 서비스 기반을 AWS에 적용했다. Task 006은 사람의 비루트 운영 자격을 준비한다. 앱 배포와 `prod` 기반 적용은 아직 진행하지 않았다.
+Next.js 앱과 AWS 인프라를 한 저장소에서 관리하는 프로젝트다. Terraform bootstrap과 GitHub 환경별 PR plan을 구성했다. Task 005에서 IAM 역할과 `preprod` 서비스 기반을, Task 006에서 비루트 운영 IAM 사용자·역할을 AWS에 적용했다. 인증 앱 MFA와 비루트 CLI 역할 수임 검증은 진행 중이다. 앱 배포와 `prod` 기반 적용은 아직 진행하지 않았다.
 
 ## 구성
 
@@ -29,9 +29,10 @@ pnpm dev
 
 ## 다음 단계
 
-1. [Task 006](docs/tasks/006-nonroot-operator.md)의 비루트 운영 자격을 PR 검토·merge 후 적용하고, 사용자 MFA와 역할 수임을 검증한다.
-2. `preprod` 결과를 기준으로 학습용 `prod` 적용을 별도로 결정한다. 두 환경은 한 AWS 계정 안에서 state와 VPC를 분리한다.
-3. ECS/EC2, ALB, ACM, Route 53, S3, Lambda를 비용 선택지와 함께 추가한다. 공개 앱은 기본적으로 끈다.
+1. [Task 007](docs/tasks/007-operator-mfa-management.md)에서 자기 MFA 관리 권한을 보완하고 인증 앱 MFA·비루트 CLI 역할 수임을 검증한다.
+2. 다음 PR에서 Terraform 변경 파일과 환경별 plan을 PR 댓글에 요약한다.
+3. `preprod` 결과를 기준으로 학습용 `prod` 적용을 별도로 결정한다. 두 환경은 한 AWS 계정 안에서 state와 VPC를 분리한다.
+4. ECS/EC2, ALB, ACM, Route 53, S3, Lambda를 비용 선택지와 함께 추가한다. 공개 앱은 기본적으로 끈다.
 
 ## 문서
 
