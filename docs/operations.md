@@ -79,7 +79,7 @@ GitHub 환경 `preprod-plan`, `prod-plan`을 만들고 승인 규칙을 설정�
 
 AWS 콘솔 또는 `aws ec2 describe-availability-zones --region ap-northeast-2`로 두 AZ가 계정에 사용 가능한지 확인한다. 기본값은 `ap-northeast-2a`와 `ap-northeast-2c`다. 다른 AZ를 써야 하면 두 환경의 plan에서 `availability_zones` 입력을 같은 순서로 지정한다. 적용 후 AZ 순서를 바꾸면 서브넷 교체가 발생할 수 있다.
 
-PR #3의 환경별 plan에서 VPC CIDR, 서브넷 CIDR, 환경별 이름과 생성 수를 확인한다. 로컬에서 plan할 때는 `infra/bootstrap`의 원격 state를 먼저 초기화하고 아래처럼 **환경을 바꿀 때마다 `-reconfigure`**를 사용한다. 이는 두 환경 state를 하나로 이전하지 않기 위한 설정이다.
+[PR #3 Terraform 실행](https://github.com/ban-dal/aws-ecs-fullstack-app/actions/runs/35824838577)에서 두 환경 각각 17개 생성, 변경·삭제 0개를 확인했다. `preprod`는 `10.60.0.0/16`, `prod`는 `10.61.0.0/16`이며 두 환경 모두 퍼블릭 IP 자동 할당이 꺼져 있다. 로컬에서 plan할 때는 `infra/bootstrap`의 원격 state를 먼저 초기화하고 아래처럼 **환경을 바꿀 때마다 `-reconfigure`**를 사용한다. 이는 두 환경 state를 하나로 이전하지 않기 위한 설정이다.
 
 ```bash
 export TF_STATE_BUCKET="$(terraform -chdir=infra/bootstrap output -raw state_bucket)"

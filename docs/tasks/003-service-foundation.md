@@ -4,7 +4,7 @@
 | --- | --- |
 | PR | [#3 · 서비스 기반 네트워크와 ECR](https://github.com/ban-dal/aws-ecs-fullstack-app/pull/3) |
 | 작업 브랜치 | `feat/service-infra-foundation` |
-| 상태 | 진행 중: Terraform 코드 완료, PR plan 검증 대기 |
+| 상태 | 진행 중: PR plan 검증 완료, 리뷰·merge 대기 |
 | 시작일 | 2026-09-23 |
 | 완료일·merge commit | PR merge 후 기록 |
 
@@ -31,8 +31,9 @@ Task 002의 환경별 원격 state와 OIDC plan을 서비스 인프라의 첫 �
 
 ## 검증과 운영 영향
 
-- 로컬 `terraform fmt -check -recursive infra`, `infra/bootstrap`·`infra/plan` init·validate 결과를 기록한다.
-- PR의 `preprod`·`prod` plan에서 계정, state key, 리소스 개수와 변경 범위를 확인한다. 각 환경의 plan은 해당 환경의 state만 사용한다.
+- 로컬 `terraform fmt -check -recursive infra`, `infra/bootstrap`·`infra/plan`의 `init -backend=false`와 `validate`, Markdown 상대 링크와 `git diff --check`가 통과했다.
+- [PR #3 Terraform 실행 35824838577](https://github.com/ban-dal/aws-ecs-fullstack-app/actions/runs/35824838577)에서 `validate`, `plan (preprod)`, `plan (prod)`가 성공했다. 앱 CI도 성공했다. 두 plan 모두 예상 계정 `065768154598`에서 각각의 S3 backend를 초기화했고 **17개 생성, 변경 0개, 삭제 0개**였다.
+- 로그에서 `preprod`의 `10.60.0.0/16`과 `prod`의 `10.61.0.0/16`, 환경별 공개·비공개 `/24` 서브넷, 자동 퍼블릭 IP 비활성화, 불변 ECR 이미지 태그를 확인했다. EC2·ALB·NAT 리소스는 plan에 없었다. 각 환경의 plan은 해당 환경의 state만 사용한다.
 - VPC와 Internet Gateway 자체에는 추가 요금이 없지만 ECR 이미지 저장량과 전송량은 사용량에 따라 과금된다. 이 Task의 코드만 merge하면 AWS 리소스나 새 비용은 발생하지 않는다. 퍼블릭 IPv4, NAT Gateway, EC2, ALB는 만들지 않는다.
 - 실제 AWS 적용 여부: 미적용.
 
