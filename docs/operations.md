@@ -69,7 +69,7 @@ GitHub 환경 `preprod-plan`, `prod-plan`을 만들고 승인 규칙을 설정�
 
 ## 3. 배포와 확인
 
-현재 PR은 앱 타입 검사·빌드와 Terraform fmt·validate를 실행한다. 같은 저장소 PR에서는 `preprod`·`prod` 원격 state plan을 실행한다. Task 003의 `infra/plan`은 계정 식별 후 `infra/live` 서비스 기반 모듈을 plan한다. `terraform plan`은 AWS 리소스를 만들지 않는다. PR 리뷰·merge 후의 apply는 후속 Task에서 보호된 워크플로로 만든다.
+현재 PR은 앱 타입 검사·빌드와 Terraform fmt·validate를 실행한다. 같은 저장소 PR에서는 `preprod`·`prod` 원격 state plan을 실행한다. Task 003의 `infra/plan`은 계정 식별 후 `infra/live` 서비스 기반 모듈을 plan한다. `terraform plan`은 AWS 리소스를 만들지 않는다. Task 004의 보호된 apply workflow는 `main`에 merge된 뒤 수동 실행할 수 있다.
 
 향후 앱 배포 후에는 도메인과 `/api/health`, ECS 서비스 이벤트, CloudWatch 로그, ALB target health, ACM 검증 CNAME을 확인한다.
 
@@ -91,11 +91,56 @@ terraform -chdir=infra/plan init -reconfigure -input=false \
 terraform -chdir=infra/plan plan -input=false -var="environment=preprod"
 ```
 
-이번 Task는 코드와 PR plan까지만 진행한다. 첫 실제 적용 전에는 plan 역할의 VPC·ECR 읽기 정책을 포함한 `infra/bootstrap` 변경을 승인된 경로로 적용하고, 보호된 `preprod` apply를 실행한다. `prod`는 preprod 결과를 확인한 뒤 별도 환경 승인으로 적용한다. 이 저장소에는 아직 apply 워크플로와 실행 역할이 없으므로 현재 GitHub PR CI에서 apply하지 않는다.
+Task 003은 코드와 PR plan까지만 진행했다. 첫 실제 적용 전에는 plan 역할의 VPC·ECR 읽기 정책과 Task 004의 적용 역할을 포함한 `infra/bootstrap` 변경을 승인된 초기 권한 절차로 적용한다. 그 뒤 보호된 `preprod` apply를 실행하고, `prod`는 preprod 결과를 확인한 뒤 별도 환경 승인으로 적용한다. 현재 GitHub PR CI에서는 apply하지 않는다.
 
 VPC와 Internet Gateway 자체에는 추가 요금이 없지만, ECR에 이미지를 넣으면 저장량·데이터 전송량에 따라 비용이 생긴다. 새 고객의 ECR 프라이빗 저장소에는 월 500 MB 저장 공간의 무료 이용 범위가 안내되어 있으나 실제 계정 자격과 초과 사용량을 확인해야 한다. 퍼블릭 IPv4는 생성하지 않았으며 나중에 할당하면 시간당 요금이 발생한다. [VPC FAQ](https://aws.amazon.com/vpc/faqs/), [Internet Gateway 안내](https://docs.aws.amazon.com/vpc/latest/userguide/VPC_Internet_Gateway.html), [ECR 요금](https://aws.amazon.com/ecr/pricing/), [VPC 요금](https://aws.amazon.com/vpc/pricing/)을 참고한다.
 
 종료할 때는 후속 ECS·ALB 등 종속 리소스를 먼저 제거한다. ECR 저장소는 `force_delete=false`이므로 이미지를 비운 뒤 삭제한다. 환경별 state로 `terraform plan -destroy`를 검토하고 승인된 destroy 절차로 제거한다. bootstrap의 state 버킷과 OIDC 역할은 별도로 유지한다.
+
+## 5. 보호된 서비스 기반 적용
+
+[Task 004](tasks/004-protected-foundation-apply.md)는 `preprod-apply`, `prod-apply` GitHub 환경과 환경별 OIDC 역할, [수동 적용 workflow](../.github/workflows/apply-foundation.yml)를 준비한다. 환경은 `main` 브랜치만 허용하고 `ban-dal` 수동 승인을 요구한다. 사용자가 선택한 1인 운영 정책으로 자기 승인은 허용하지만 독립 검토자는 없다. 기존 `preprod-plan`, `prod-plan` 승인과 적용 승인은 서로 다른 작업이다.
+
+2026-09-23에 두 적용 환경을 설정하고 API로 다시 확인했다. `prevent_self_review=false`, 필수 승인자 `ban-dal`, 배포 가능한 브랜치 패턴은 `main` 하나다. 각 환경의 `AWS_APPLY_ROLE_ARN`은 `arn:aws:iam::065768154598:role/aws-fullstack-lab-<environment>-apply` 형식으로 등록했다. 역할은 아직 AWS에 없으므로 ARN 변수 등록만으로 배포할 수 없다. 다른 계정에서 재구성할 때는 계정 ID와 GitHub 사용자 ID를 새 값으로 바꾼다. [GitHub 환경 API](https://docs.github.com/en/rest/deployments/environments)와 [브랜치 정책 API](https://docs.github.com/en/rest/deployments/branch-policies)를 참고한다.
+
+workflow는 `main`에서 수동으로 `preprod` 또는 `prod` 하나를 선택해 실행한다. 먼저 해당 `*-plan` 환경을 승인하고 로그의 변경을 확인한다. 이어 `*-apply` 환경을 승인하면 새 plan을 만들어 검사한 뒤 그 plan을 적용한다. 현재 안전장치는 `module.service_foundation` 안에서 최대 17개 **신규 생성**만 허용한다. 변경·교체·삭제나 다른 모듈의 변경은 실패한다. plan 파일과 JSON은 runner 임시 디렉터리에서만 사용하며 artifact로 올리지 않는다. merge만으로 배포가 시작되지 않는다.
+
+### 최초 IAM 권한 준비
+
+적용 역할은 Terraform 코드에만 있으며 아직 AWS에 존재하지 않는다. 따라서 첫 역할 생성에 적용 workflow를 사용할 수 없다. Task 004 PR이 검토·merge된 뒤, 기존 관리자 자격 증명으로 bootstrap state에 한 번 적용하는 예외가 필요하다. 이 예외는 서비스 리소스를 만들지 않는다. 계정과 `main` commit을 확인하고, `terraform plan`에서 `foundation_plan_read` 정책 1개와 환경별 적용 역할·정책 각 2개, 총 **5개 생성·변경 0개·삭제 0개**인지 재확인한다. 결과가 다르면 진행하지 않는다.
+
+```bash
+test "$(git branch --show-current)" = "main"
+export AWS_PROFILE=aws-fullstack-terraform
+aws sts get-caller-identity
+if [ ! -f infra/bootstrap/backend.s3.tf ]; then
+  cp infra/bootstrap/backend.s3.tf.example infra/bootstrap/backend.s3.tf
+fi
+terraform -chdir=infra/bootstrap init -reconfigure -input=false \
+  -backend-config="bucket=aws-ecs-fullstack-app" \
+  -backend-config="key=bootstrap/terraform.tfstate" \
+  -backend-config="region=ap-northeast-2"
+TF_PLAN_DIR="$(mktemp -d)"
+trap 'rm -rf "$TF_PLAN_DIR"' EXIT
+terraform -chdir=infra/bootstrap plan -input=false \
+  -var-file=terraform.tfvars -out="$TF_PLAN_DIR/bootstrap.tfplan"
+terraform -chdir=infra/bootstrap show -no-color "$TF_PLAN_DIR/bootstrap.tfplan"
+# plan과 계정 확인 후 별도 승인 시에만 실행
+terraform -chdir=infra/bootstrap apply -input=false "$TF_PLAN_DIR/bootstrap.tfplan"
+terraform -chdir=infra/bootstrap output foundation_apply_role_arns
+```
+
+`backend.s3.tf`, `terraform.tfvars`, plan 파일과 자격 증명을 커밋하지 않는다. 실제 적용 뒤에는 실행자, 날짜, commit, plan·apply 결과와 두 IAM 역할 ARN을 이 문서 또는 다음 Task에 기록한다. 기존 관리자 자격 증명을 계속 배포에 사용하지 않는다. [Terraform 저장 plan](https://developer.hashicorp.com/terraform/tutorials/cli/plan)에는 민감한 데이터가 들어갈 수 있으므로 임시 디렉터리에서만 사용한다.
+
+### 환경별 서비스 기반 적용
+
+bootstrap 적용 후 `foundation_apply_role_arns`의 `preprod`·`prod` 값을 각 GitHub 적용 환경의 `AWS_APPLY_ROLE_ARN` 변수와 대조한다. `TF_STATE_BUCKET`, `AWS_ACCOUNT_ID`, `AWS_REGION`, `AWS_PLAN_ROLE_ARN`은 기존 저장소 변수를 사용한다. 장기 AWS 키는 등록하지 않는다.
+
+1. GitHub Actions에서 `Apply service foundation`을 `main`의 `preprod`로 수동 실행한다. `preprod-plan` 승인 후 plan 결과와 예상 계정을 확인하고, `preprod-apply`를 승인한다.
+2. 적용 로그, `preprod/terraform.tfstate`, VPC·서브넷·보안 그룹·ECR 존재를 확인한다. 이 workflow는 공개 앱이나 EC2·ALB를 만들지 않는다.
+3. 비용과 preprod 결과를 검토한 뒤에만 `prod`를 별도 실행한다. `prod-plan`, `prod-apply`도 각각 승인한다.
+
+두 환경은 서로 다른 state key와 ECR 이름·VPC CIDR을 사용한다. 적용 역할의 S3 state 쓰기 권한도 환경별 key로 나뉜다. 다만 EC2 네트워크 생성·삭제 API 권한은 서울 리전으로 제한할 뿐 환경별 리소스 ID까지 묶지 못했다. 한 AWS 계정을 공유하는 한 실수에 대한 완전한 환경 격리는 아니다. 이 workflow에는 destroy 경로가 없으며 종료 시에는 별도 검토된 절차를 만든다.
 
 ## 비용 관리
 

@@ -4,9 +4,9 @@
 | --- | --- |
 | PR | [#3 · 서비스 기반 네트워크와 ECR](https://github.com/ban-dal/aws-ecs-fullstack-app/pull/3) |
 | 작업 브랜치 | `feat/service-infra-foundation` |
-| 상태 | 진행 중: PR plan 검증 완료, 리뷰·merge 대기 |
+| 상태 | 완료: PR merge |
 | 시작일 | 2026-09-23 |
-| 완료일·merge commit | PR merge 후 기록 |
+| 완료일·merge commit | 2026-09-23 · `b7760bdec3fff89b95dfcf6e1ee03f65620d0946` |
 
 ## 목표와 완료 기준
 
@@ -39,4 +39,4 @@ Task 002의 환경별 원격 state와 OIDC plan을 서비스 인프라의 첫 �
 
 ## 남은 사항과 다음 Task
 
-Task 004에서는 보호된 `apply` 워크플로와 최소 권한 실행 역할을 먼저 설계하고, bootstrap 읽기 정책을 적용한 다음 기반 리소스를 `preprod`에서 검증한다. 그 뒤 ECS/EC2, ALB, HTTPS를 비용 스위치 `enable_public_app=false`로 단계적으로 추가한다.
+[Task 004](004-protected-foundation-apply.md)에서 보호된 적용 workflow와 환경별 역할·승인 규칙을 준비한다. 최초 IAM bootstrap 적용과 `preprod` 기반 리소스 생성은 Task 004 PR merge 후 별도로 검토하고 실행한다. 그 뒤 ECS/EC2, ALB, HTTPS를 비용 스위치 `enable_public_app=false`로 단계적으로 추가한다.

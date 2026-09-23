@@ -37,13 +37,15 @@ flowchart LR
   Checks --> Plan[preprod/prod plan]
   Plan --> Review[사람 리뷰]
   Review --> Merge[main merge]
-  Merge --> Preprod[preprod apply]
-  Preprod --> Approval[prod 환경 승인]
-  Approval --> Prod[prod 수동 apply]
+  Merge --> Bootstrap[최초 IAM bootstrap 적용]
+  Bootstrap --> Dispatch[main에서 환경별 수동 실행]
+  Dispatch --> ApplyPlan[plan 환경 승인·확인]
+  ApplyPlan --> Approval[apply 환경 승인]
+  Approval --> Apply[선택한 환경 apply]
 ```
 
 구현 시 첫 배포에서는 ECR을 먼저 생성하고 이미지를 push한 뒤 ECS 서비스를 시작한다. 서비스는 bridge 네트워크의 동적 호스트 포트를 사용한다. ALB 대상 그룹은 instance 유형이고 EC2 보안 그룹은 ALB 보안 그룹에서 오는 임시 포트만 연다.
 
 ## 보안과 한계
 
-bootstrap 구성은 S3 공개 접근 차단, HTTPS 강제, SSE-S3 암호화, 버전 관리를 설정한다. OIDC plan 역할은 이 저장소의 immutable subject와 `preprod-plan`·`prod-plan` 환경 이름만 신뢰한다. state 객체 읽기와 잠금 파일에 필요한 권한만 부여하고 state 객체 쓰기 권한은 주지 않는다. Task 003에서 VPC·ECR refresh용 읽기 정책을 코드에 추가했으나 AWS 적용 전에는 현재 역할에 반영되지 않는다. ALB 보안 그룹의 공개 ingress는 닫혀 있으며 EC2와 apply 역할은 후속 Task에서 설계한다.
+bootstrap 구성은 S3 공개 접근 차단, HTTPS 강제, SSE-S3 암호화, 버전 관리를 설정한다. OIDC plan 역할은 이 저장소의 immutable subject와 `preprod-plan`·`prod-plan` 환경 이름만 신뢰한다. state 객체 읽기와 잠금 파일에 필요한 권한만 부여하고 state 객체 쓰기 권한은 주지 않는다. Task 003의 VPC·ECR 읽기 정책과 Task 004의 환경별 적용 역할은 아직 AWS에 반영되지 않았다. 적용 역할은 선택한 환경의 state key와 서울 리전의 기반 네트워크 작업, 환경별 ECR 저장소 작업만 허용한다. EC2 네트워크 API 일부는 생성 전 리소스 ID를 알 수 없어 서울 리전 전체를 대상으로 하므로 두 환경 간 완전한 권한 격리는 아니다. ALB 보안 그룹의 공개 ingress는 닫혀 있다.

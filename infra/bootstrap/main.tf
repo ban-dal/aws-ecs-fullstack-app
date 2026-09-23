@@ -132,7 +132,7 @@ resource "aws_iam_role_policy" "state_plan" {
 data "aws_iam_policy_document" "foundation_plan_read" {
   statement {
     sid       = "ReadVpcFoundation"
-    actions   = ["ec2:DescribeVpcs", "ec2:DescribeSubnets", "ec2:DescribeInternetGateways", "ec2:DescribeRouteTables", "ec2:DescribeSecurityGroups", "ec2:DescribeSecurityGroupRules"]
+    actions   = ["ec2:DescribeVpcs", "ec2:DescribeVpcAttribute", "ec2:DescribeSubnets", "ec2:DescribeInternetGateways", "ec2:DescribeRouteTables", "ec2:DescribeSecurityGroups", "ec2:DescribeSecurityGroupRules", "ec2:DescribeNetworkInterfaces", "ec2:DescribeTags"]
     resources = ["*"]
   }
 
