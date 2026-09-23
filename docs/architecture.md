@@ -1,6 +1,6 @@
 # 아키텍처
 
-> 아래 앱 서비스 구조는 목표 아키텍처다. state 버킷·OIDC·비용 Budget의 bootstrap은 AWS에 적용했다. Task 003에서 VPC·서브넷·보안 그룹·ECR 코드를 준비했지만 서비스 리소스는 아직 적용하지 않았다.
+> 아래 앱 서비스 구조는 목표 아키텍처다. state 버킷·OIDC·비용 Budget과 `preprod` 서비스 기반은 AWS에 적용했다. Task 006의 비루트 운영 주체는 PR에서 준비 중이며 아직 AWS에 적용하지 않았다.
 
 ```mermaid
 flowchart LR
@@ -27,7 +27,7 @@ flowchart LR
 
 ## 환경과 데이터 경계
 
-`preprod`와 `prod`는 `infra/plan` 루트와 `infra/live` 모듈을 공유하되 별도 `environment` 값을 넣는다. VPC CIDR은 각각 `10.60.0.0/16`, `10.61.0.0/16`이고 ECR 및 네트워크 이름과 `preprod/terraform.tfstate`, `prod/terraform.tfstate` 키를 분리한다. 향후 ECS·ALB·S3·Lambda도 환경별 이름을 사용한다. 한 AWS 계정을 공유하면 IAM과 계정 수준 장애는 분리되지 않는다.
+`preprod`와 `prod`는 AI 성능 실험과 학습을 위한 환경이다. `infra/plan` 루트와 `infra/live` 모듈을 공유하되 별도 `environment` 값을 넣는다. VPC CIDR은 각각 `10.60.0.0/16`, `10.61.0.0/16`이고 ECR 및 네트워크 이름과 `preprod/terraform.tfstate`, `prod/terraform.tfstate` 키를 분리한다. 향후 ECS·ALB·S3·Lambda도 환경별 이름을 사용한다. 두 환경은 한 AWS 계정을 공유하므로 IAM과 계정 수준 장애는 분리되지 않는다. 계정 분리는 실제 운영 요건이 생길 때 다시 결정한다.
 
 Task 005에서 `preprod` VPC·서브넷·라우팅·보안 그룹·비공개 ECR을 적용하고 사후 변경 없음 plan을 확인했다. `prod`는 같은 모듈을 plan만 했으며 아직 적용하지 않았다. 공개 앱과 실행 중인 컴퓨트 리소스는 없다.
 
@@ -51,3 +51,5 @@ flowchart LR
 ## 보안과 한계
 
 bootstrap 구성은 S3 공개 접근 차단, HTTPS 강제, SSE-S3 암호화, 버전 관리를 설정한다. OIDC plan 역할은 이 저장소의 immutable subject와 `preprod-plan`·`prod-plan` 환경 이름만 신뢰한다. state 객체 읽기와 잠금 파일에 필요한 권한만 부여하고 state 객체 쓰기 권한은 주지 않는다. Task 005에서 VPC·ECR 읽기 정책과 환경별 적용 역할을 AWS에 반영했다. 적용 역할은 선택한 환경의 state key와 서울 리전의 기반 네트워크 작업, 환경별 ECR 저장소 작업만 허용한다. EC2 네트워크 API 일부는 생성 전 리소스 ID를 알 수 없어 서울 리전 전체를 대상으로 하므로 두 환경 간 완전한 권한 격리는 아니다. ALB 보안 그룹의 공개 ingress는 닫혀 있다.
+
+Task 006은 콘솔 비밀번호·MFA를 Terraform 밖에서 등록하는 사람의 IAM 사용자와 MFA 필수 bootstrap 운영 역할을 추가한다. 사용자는 운영 역할 수임 외에 직접 리소스 변경 권한을 갖지 않는다. 역할은 프로젝트 state 버킷과 bootstrap OIDC·GitHub 역할 관리에 한정하며 자기 역할 정책을 수정하지 못한다. Budget은 읽기만 가능하다. 이 운영 역할도 프로젝트의 GitHub 적용 역할 정책을 바꿀 수 있는 높은 권한이므로 일상 배포 대신 bootstrap 관리에만 사용한다.

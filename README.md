@@ -1,13 +1,13 @@
 # AWS 풀스택 실험실
 
-Next.js 앱과 AWS 인프라를 한 저장소에서 관리하는 프로젝트다. Terraform bootstrap과 GitHub 환경별 PR plan을 구성했다. Task 003에서 서비스 기반 네트워크와 ECR 코드를 준비했고, Task 004에서 수동 승인 적용 경로를 구성했다. Task 005에서 IAM 역할과 `preprod` 서비스 기반을 AWS에 적용했다. 앱 배포와 `prod` 기반 적용은 아직 진행하지 않았다.
+Next.js 앱과 AWS 인프라를 한 저장소에서 관리하는 프로젝트다. Terraform bootstrap과 GitHub 환경별 PR plan을 구성했다. Task 005에서 IAM 역할과 `preprod` 서비스 기반을 AWS에 적용했다. Task 006은 사람의 비루트 운영 자격을 준비한다. 앱 배포와 `prod` 기반 적용은 아직 진행하지 않았다.
 
 ## 구성
 
 | 경로 | 용도 |
 | --- | --- |
 | `apps/web` | Next.js 앱과 `/api/health` |
-| `infra/bootstrap` | state S3 버킷, GitHub OIDC plan 역할, 선택형 비용 Budget |
+| `infra/bootstrap` | state S3 버킷, GitHub OIDC 역할, 선택형 비용 Budget, 사람의 비루트 운영 역할 |
 | `infra/plan` | 환경별 원격 state·계정 확인·서비스 기반 모듈을 연결하는 PR plan 루트 |
 | `infra/live` | VPC·서브넷·라우팅·보안 그룹·비공개 ECR 모듈 |
 | `.github/workflows/ci.yml` | PR과 main의 앱 타입 검사·빌드 |
@@ -29,8 +29,8 @@ pnpm dev
 
 ## 다음 단계
 
-1. [Task 005](docs/tasks/005-preprod-foundation-apply.md)의 적용 결과와 비용·재구성 기록을 검토한다.
-2. `preprod` 결과를 기준으로 `prod` 적용을 별도로 결정한다.
+1. [Task 006](docs/tasks/006-nonroot-operator.md)의 비루트 운영 자격을 PR 검토·merge 후 적용하고, 사용자 MFA와 역할 수임을 검증한다.
+2. `preprod` 결과를 기준으로 학습용 `prod` 적용을 별도로 결정한다. 두 환경은 한 AWS 계정 안에서 state와 VPC를 분리한다.
 3. ECS/EC2, ALB, ACM, Route 53, S3, Lambda를 비용 선택지와 함께 추가한다. 공개 앱은 기본적으로 끈다.
 
 ## 문서

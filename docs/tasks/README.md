@@ -10,7 +10,8 @@
 | [002 · GitHub PR plan 환경 구성](002-github-pr-plan-setup.md) | 환경 보호·저장소 변수·실제 plan 검증 | [#2](https://github.com/ban-dal/aws-ecs-fullstack-app/pull/2) | 완료: 2026-09-23 merge |
 | [003 · 서비스 기반 네트워크와 ECR](003-service-foundation.md) | 환경별 VPC·서브넷·보안 그룹·ECR 코드와 PR plan | [#3](https://github.com/ban-dal/aws-ecs-fullstack-app/pull/3) | 완료: 2026-09-23 merge |
 | [004 · 보호된 서비스 기반 적용 경로](004-protected-foundation-apply.md) | 환경별 OIDC 적용 역할·수동 승인 workflow | [#4](https://github.com/ban-dal/aws-ecs-fullstack-app/pull/4) | 완료: 2026-09-23 merge |
-| [005 · bootstrap IAM 및 preprod 기반 적용](005-preprod-foundation-apply.md) | 최초 IAM 반영·보호된 preprod 적용·실제 리소스 검증 | [#5](https://github.com/ban-dal/aws-ecs-fullstack-app/pull/5) | 진행 중 |
+| [005 · bootstrap IAM 및 preprod 기반 적용](005-preprod-foundation-apply.md) | 최초 IAM 반영·보호된 preprod 적용·실제 리소스 검증 | [#5](https://github.com/ban-dal/aws-ecs-fullstack-app/pull/5) | 완료: 2026-09-23 merge |
+| [006 · 비루트 운영 주체](006-nonroot-operator.md) | 사람의 AWS 운영 자격과 MFA 역할, 루트 사용 종료 절차 | [#6](https://github.com/ban-dal/aws-ecs-fullstack-app/pull/6) | 진행 중 |
 
 ## 작성 흐름
 
