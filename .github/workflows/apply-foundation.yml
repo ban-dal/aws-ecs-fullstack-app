@@ -1,3 +1,11 @@
+# Applies infra/plan for one environment from merged main only; merging alone
+# never deploys. Plan and apply use separate OIDC roles and GitHub environments.
+# The saved plan stays on the runner because plan files can hold sensitive values.
+#
+# Known limits: the guard below allows only new resources in
+# module.service_foundation, so updates, replacements, and deletes cannot be
+# applied here yet. The apply job plans again after approval, so the approved
+# plan and the applied plan are not tied together.
 name: Apply service foundation
 
 on:

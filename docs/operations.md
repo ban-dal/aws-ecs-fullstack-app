@@ -1,14 +1,14 @@
 # 운영 가이드
 
-지금 유효한 절차만 둔다. 무엇이 적용됐는지는 [README의 현재 상태](../README.md#현재-상태), 왜 이렇게 하는지는 [결정 기록](decisions/README.md), 언제 어떻게 실행했는지는 해당 PR과 PR 댓글을 본다.
+지금 유효한 절차만 둔다. 적용 상태는 [README](../README.md#적용-상태-확인), 설정의 이유는 해당 코드와 스크립트의 주석, 실행 결과는 해당 PR 댓글을 본다.
 
 ## 누가 무엇을 적용하나
 
 | 대상 | 적용 주체 | 경로 |
 | --- | --- | --- |
 | 서비스 기반 (`infra/plan`: VPC·서브넷·보안 그룹·ECR) | GitHub 환경별 apply 역할 | [4절](#4-서비스-기반-적용)의 `Apply service foundation` |
-| bootstrap 중 state 버킷, OIDC 제공자, GitHub 역할의 정책·신뢰 정책 | 운영 역할 `aws-fullstack-lab-bootstrap-operator` | [2절](#2-bootstrap-변경-적용)의 로컬 저장 plan |
-| bootstrap 중 운영 사용자·역할, Budget, GitHub 역할 boundary 정책 | 계정 root 세션 | [2절](#2-bootstrap-변경-적용)의 로컬 저장 plan |
+| bootstrap 중 state 버킷, OIDC 제공자, GitHub 역할의 정책·신뢰 정책 | 운영 역할 `aws-fullstack-lab-bootstrap-operator` | [2절](#2-bootstrap-변경-적용)의 `scripts/bootstrap.sh` |
+| bootstrap 중 운영 사용자·역할, Budget, GitHub 역할 boundary 정책 | 계정 root 세션 | [2절](#2-bootstrap-변경-적용)의 `scripts/bootstrap.sh` |
 | 콘솔 비밀번호, MFA 장치 | 사용자 본인 | IAM 콘솔 |
 
 PR CI는 apply하지 않는다. merge만으로 배포가 시작되지 않는다.
@@ -19,7 +19,7 @@ PR CI는 apply하지 않는다. merge만으로 배포가 시작되지 않는다.
 
 ### 운영 역할 (일상)
 
-AWS CLI v2.32.0 이상이 필요하다. `aws login`은 브라우저에 남은 세션을 고를 수 있으므로 첫 호출 주체가 `user/aws-fullstack-lab-operator`인지 확인한다. `mfa_serial`에는 패스키가 아닌 인증 앱(TOTP) 장치 ARN을 쓴다([0004](decisions/0004-human-operator-access.md)).
+AWS CLI v2.32.0 이상이 필요하다. `aws login`은 브라우저에 남은 세션을 고를 수 있으므로 첫 호출 주체가 `user/aws-fullstack-lab-operator`인지 확인한다. AWS CLI/API는 패스키 MFA를 지원하지 않으므로 `mfa_serial`에는 인증 앱(TOTP) 장치 ARN을 쓴다.
 
 ```bash
 aws configure set region ap-northeast-2 --profile aws-fullstack-operator-login
@@ -61,50 +61,34 @@ aws sts get-caller-identity
 
 ## 2. bootstrap 변경 적용
 
-bootstrap 변경은 PR에서 plan 범위(생성·수정·삭제 개수와 대상)를 먼저 밝힌다. PR의 환경별 plan은 `infra/plan`만 실행하므로 bootstrap 변경은 보여 주지 않는다.
+PR의 환경별 plan은 `infra/plan`만 실행하므로 bootstrap 변경을 보여 주지 않는다. bootstrap을 바꾸는 PR은 작성 중에 `scripts/bootstrap.sh plan`을 실행해 변경 요약과 정책 테스트 결과를 PR 본문에 적는다.
 
-1. PR merge 후 `main`을 최신으로 받는다. [누가 무엇을 적용하나](#누가-무엇을-적용하나)에 따라 프로필을 고르고 계정을 확인한다.
-2. 저장 plan을 임시 디렉터리에 만들고, PR에 적은 범위와 같은지 확인한다. 다르면 중단한다.
-3. 같은 저장 plan을 적용하고, 사후 plan이 변경 없음(종료 코드 0)인지 확인한다.
-4. GitHub 변수 등 후속 설정이 PR에 적혀 있으면 곧바로 진행한다.
-5. 결과(실행 주체, commit, plan·apply 개수, 사후 plan, 후속 설정)를 해당 PR에 댓글로 남긴다.
+PR merge 후:
 
-```bash
-test "$(git branch --show-current)" = "main"
-aws sts get-caller-identity
-terraform -chdir=infra/bootstrap init -reconfigure -input=false \
-  -backend-config='bucket=aws-ecs-fullstack-app' \
-  -backend-config='key=bootstrap/terraform.tfstate' \
-  -backend-config='region=ap-northeast-2'
-TF_PLAN_DIR="$(mktemp -d)"
-trap 'rm -rf "$TF_PLAN_DIR"' EXIT
-terraform -chdir=infra/bootstrap plan -input=false \
-  -var-file=terraform.tfvars -out="$TF_PLAN_DIR/bootstrap.tfplan"
-terraform -chdir=infra/bootstrap show -no-color "$TF_PLAN_DIR/bootstrap.tfplan"
-# 범위 확인 후에만 실행
-terraform -chdir=infra/bootstrap apply -input=false "$TF_PLAN_DIR/bootstrap.tfplan"
-terraform -chdir=infra/bootstrap plan -detailed-exitcode -input=false -var-file=terraform.tfvars
-```
+1. `main`을 최신으로 받고 [누가 무엇을 적용하나](#누가-무엇을-적용하나)에 따라 프로필을 고른다.
+2. `scripts/bootstrap.sh plan`을 실행한다. 저장 plan을 만들고, 생성·수정·삭제 요약을 출력하고, [정책 테스트](../infra/bootstrap/policy-tests/iam.test.mjs)를 실행한다. 요약이 PR에 적은 범위와 다르거나 테스트가 실패하면 중단한다.
+3. `scripts/bootstrap.sh apply`로 같은 저장 plan을 적용한다. `main`이 `origin/main`과 같고, plan을 만든 commit과 같고, 커밋하지 않은 변경이 없을 때만 실행된다. 적용 후 plan이 변경 없음인지 확인하고 저장 plan을 지운다.
+4. GitHub 변수 등 후속 설정이 PR에 적혀 있으면 곧바로 진행하고 `scripts/check-github-settings.sh`로 확인한다.
+5. 스크립트 출력(호출 주체, commit, 변경 요약, 사후 plan)을 해당 PR에 댓글로 남긴다.
 
-저장 plan에는 민감한 값이 들어갈 수 있으므로 임시 디렉터리에서만 쓴다. `terraform.tfvars`(계정 ID, 버킷 이름, 알림 이메일 등)는 커밋하지 않는다.
-
-GitHub 역할의 boundary([0005](decisions/0005-github-role-boundary.md))는 서비스 단위로 권한을 제한한다. 새 AWS 서비스를 쓰는 PR은 boundary 확장을 함께 넣고 root로 적용한다.
+`terraform.tfvars`(계정 ID, 버킷 이름, 알림 이메일 등)는 커밋하지 않는다. 저장 plan은 사용자 임시 디렉터리에만 둔다.
 
 ## 3. GitHub 설정
 
-| 환경 | 보호 규칙 | 변수 |
-| --- | --- | --- |
-| `preprod-plan`, `prod-plan` | `ban-dal` 수동 승인, 자기 승인 허용 | `AWS_PLAN_ROLE_ARN` = `plan_role_arns` output의 해당 값 |
-| `preprod-apply`, `prod-apply` | `ban-dal` 수동 승인, 자기 승인 허용, `main` 브랜치만 | `AWS_APPLY_ROLE_ARN` = `foundation_apply_role_arns` output의 해당 값 |
+`scripts/check-github-settings.sh`가 기대하는 설정의 기준이다. 환경별 보호 규칙, `*-apply`의 `main` 브랜치 제한, 저장소 변수(`TF_STATE_BUCKET`, `AWS_ACCOUNT_ID`, `AWS_REGION`), 환경별 역할 ARN 변수를 확인하고, 어긋난 항목을 `FAIL`로 출력한다. 설정은 바꾸지 않는다. 역할 ARN은 bootstrap output(`plan_role_arns`, `foundation_apply_role_arns`)과 같아야 한다.
 
-저장소 변수는 `TF_STATE_BUCKET`, `AWS_ACCOUNT_ID`, `AWS_REGION`이다. `TF_STATE_BUCKET`이나 `AWS_ACCOUNT_ID`가 없으면 PR의 AWS plan은 건너뛰고, 환경 변수 `AWS_PLAN_ROLE_ARN`이 없으면 역할 확인 단계에서 실패한다. fork PR은 AWS 자격을 받지 않는다. 환경 보호 규칙을 변수보다 먼저 만든다([0002](decisions/0002-github-oidc-approvals.md)).
+```bash
+scripts/check-github-settings.sh
+```
+
+`FAIL` 항목은 저장소의 Settings → Environments 또는 `gh api`로 맞춘다. 환경 보호 규칙을 변수보다 먼저 만든다.
 
 ## 4. 서비스 기반 적용
 
 1. GitHub Actions에서 `Apply service foundation`을 `main`의 환경 하나로 실행한다.
 2. `*-plan`을 승인하고 로그의 변경과 AWS 계정을 확인한다.
-3. `*-apply`를 승인한다. 적용 작업은 plan을 다시 만들고, `module.service_foundation` 안의 신규 생성만 있을 때 그 plan을 적용한다. 수정·교체·삭제가 있으면 실패한다([0003](decisions/0003-protected-apply.md)).
-4. 결과를 해당 PR 또는 관련 이슈에 댓글로 남긴다.
+3. `*-apply`를 승인한다. 적용 작업은 plan을 다시 만들고, `module.service_foundation` 안의 신규 생성만 있을 때 그 plan을 적용한다. 수정·교체·삭제가 있으면 실패한다. 이 제한의 이유와 한계는 [workflow 주석](../.github/workflows/apply-foundation.yml)에 있다.
+4. 적용 기록은 GitHub Deployments의 `*-apply` 환경에 자동으로 남는다. 계기가 된 PR에 실행 링크를 댓글로 남긴다.
 
 `prod`는 `preprod` 결과와 비용을 검토한 뒤 따로 결정한다. 서비스 기반 plan은 PR이나 이 workflow의 plan 단계에서 확인한다. 운영 역할에는 EC2 읽기 권한이 없어 로컬 `infra/plan` plan은 지원하지 않는다.
 
@@ -134,24 +118,24 @@ GitHub 역할의 boundary([0005](decisions/0005-github-role-boundary.md))는 서
    terraform -chdir=infra/bootstrap output
    ```
 
-5. [3절](#3-github-설정)의 GitHub 환경과 변수를 output 값으로 설정한다. 다른 계정이면 계정 ID와 GitHub 사용자 ID를 새 값으로 바꾼다.
-6. IAM 콘솔에서 `aws-fullstack-lab-operator`의 콘솔 접근을 켠다. 사용자는 초기 비밀번호를 바꾸고, 필요하면 콘솔용 패스키와 함께 이름이 `aws-fullstack-lab-operator`인 인증 앱 MFA를 등록한다. [1절](#운영-역할-일상)의 프로필로 bootstrap plan이 변경 없음인지 확인한 뒤 root 세션을 로그아웃한다.
+5. GitHub 환경과 변수를 output 값으로 설정하고 [3절](#3-github-설정)의 스크립트로 확인한다. 다른 계정이면 계정 ID와 GitHub 사용자 ID를 새 값으로 바꾼다.
+6. IAM 콘솔에서 `aws-fullstack-lab-operator`의 콘솔 접근을 켠다. 사용자는 초기 비밀번호를 바꾸고, 필요하면 콘솔용 패스키와 함께 이름이 `aws-fullstack-lab-operator`인 인증 앱 MFA를 등록한다. [1절](#운영-역할-일상)의 프로필로 `scripts/bootstrap.sh plan`이 변경 없음과 테스트 통과를 보이면 root 세션을 로그아웃한다.
 7. [4절](#4-서비스-기반-적용)로 `preprod`부터 적용한다.
 
 ## 6. 비용 관리
 
 - 새 AWS Free plan은 최대 6개월 또는 크레딧 소진 시 끝난다(2026년 9월 기준). Billing의 Free Tier 85% 알림과 크레딧 잔여량을 확인한다.
-- Budget은 크레딧을 제외한 사용 비용 기준으로 월간 80% 실제 사용과 100% 예상 사용을 이메일로 알린다. 알림만 할 뿐 지출을 멈추지 않는다.
-- IAM, VPC, Internet Gateway 자체는 무료다. S3 state 저장·요청과 ECR 이미지 저장·전송은 사용량에 따라 과금된다. state 버킷의 이전 버전은 90일 뒤 만료된다(최근 10개 유지).
+- Budget([`main.tf`](../infra/bootstrap/main.tf))은 이메일로 알리기만 하고 지출을 멈추지 않는다.
+- IAM, VPC, Internet Gateway 자체는 무료다. S3 state 저장·요청과 ECR 이미지 저장·전송은 사용량에 따라 과금된다. state 버킷의 이전 버전은 lifecycle 규칙으로 만료된다.
 - 퍼블릭 IPv4, EC2, ALB, Route 53 호스팅 영역은 과금 대상이다. 추가하는 PR에서 서울 리전 요금으로 비용을 계산하고, 공개 앱은 기본적으로 끈다. NAT Gateway는 쓰지 않는다.
 
 ## 7. 종료·롤백·복구
 
 - 서비스 기반 종료: ECS·ALB 등 종속 리소스를 먼저 없앤다. ECR은 `force_delete=false`이므로 이미지를 비운 뒤 삭제한다. 현재 workflow에는 destroy 경로가 없으므로 환경별 `terraform plan -destroy`를 검토하는 별도 절차를 PR로 만든다.
-- bootstrap 롤백: 이전 `main` commit의 구성으로 [2절](#2-bootstrap-변경-적용)의 저장 plan을 만들어 적용하고, 바뀐 GitHub 변수를 되돌린다.
+- bootstrap 롤백: 되돌리는 PR을 merge한 뒤 [2절](#2-bootstrap-변경-적용)로 적용하고, 바뀐 GitHub 변수를 되돌린다.
 - Terraform 오류: 마지막 성공 state의 S3 버전을 확인하고 state를 손으로 고치지 않는다. `terraform plan`으로 선언과 실제의 차이를 먼저 본다.
 - state 버킷: 삭제 전에 `bootstrap`, `preprod`, `prod` state를 백업하고 OIDC 역할 사용을 멈춘다. 버킷은 `force_destroy=false`다.
-- 운영 역할이나 MFA가 고장 나면 root로 복구하고, 원인과 조치를 관련 PR 또는 이슈에 남긴다.
+- 운영 역할이나 MFA가 고장 나면 root로 복구하고, 원인과 조치를 관련 PR 댓글 또는 이슈에 남긴다.
 
 ## 외부 참고
 

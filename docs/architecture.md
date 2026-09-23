@@ -1,6 +1,6 @@
 # 아키텍처
 
-> 아래 구조는 목표 아키텍처다. 실제로 적용된 범위는 [README의 현재 상태](../README.md#현재-상태)를 본다. 주요 선택의 이유는 [결정 기록](decisions/README.md)에 있다.
+> 아래 구조는 목표 아키텍처다. 실제로 적용된 범위는 [README](../README.md#적용-상태-확인)를 본다. 이 문서는 잘 바뀌지 않는 구조만 다루고, 세부 설정과 그 이유는 링크한 코드의 주석이 기준이다.
 
 ```mermaid
 flowchart LR
@@ -27,7 +27,7 @@ flowchart LR
 
 ## 환경과 데이터 경계
 
-`preprod`와 `prod`는 AI 성능 실험과 학습을 위한 환경이다. `infra/plan` 루트와 `infra/live` 모듈을 공유하되 별도 `environment` 값을 넣는다. VPC CIDR은 각각 `10.60.0.0/16`, `10.61.0.0/16`이고 ECR 및 네트워크 이름과 `preprod/terraform.tfstate`, `prod/terraform.tfstate` 키를 분리한다. 향후 ECS·ALB·S3·Lambda도 환경별 이름을 사용한다. 두 환경은 한 AWS 계정을 공유하므로 IAM과 계정 수준 장애는 분리되지 않는다([0001](decisions/0001-single-account-environments.md)).
+`preprod`와 `prod`는 AI 성능 실험과 학습을 위한 환경이다. `infra/plan` 루트와 `infra/live` 모듈을 공유하되 별도 `environment` 값을 넣는다. VPC CIDR은 각각 `10.60.0.0/16`, `10.61.0.0/16`이고 ECR 및 네트워크 이름과 `preprod/terraform.tfstate`, `prod/terraform.tfstate` 키를 분리한다. 향후 ECS·ALB·S3·Lambda도 환경별 이름을 사용한다. 두 환경은 한 AWS 계정을 공유하므로 IAM과 계정 수준 장애는 분리되지 않는다. 계정을 나누려면 AWS Organizations가 필요한데, 현재 Free plan 계정이 가입하면 크레딧이 즉시 만료되고 유료 플랜으로 전환된다. 실제 사용자 데이터를 다루거나 Free plan이 끝나거나 환경 간 IAM 격리가 필요해지면 계정 분리를 다시 검토한다.
 
 ## 배포 흐름
 
@@ -48,9 +48,11 @@ flowchart LR
 
 ## 보안과 한계
 
-- **state 버킷:** 공개 접근 차단, HTTPS 강제, SSE-S3 암호화, 버전 관리, 이전 버전 만료. `force_destroy=false`.
-- **GitHub OIDC 역할:** 저장소 immutable subject와 GitHub 환경 이름으로 신뢰를 제한한다([0002](decisions/0002-github-oidc-approvals.md)). plan 역할은 환경별로 나뉘어 자기 state 읽기와 잠금만 한다. apply 역할은 자기 state key, 자기 ECR 저장소, `Environment` 태그가 같은 EC2 네트워크 리소스만 생성·변경·삭제한다.
-- **permissions boundary:** 모든 GitHub 역할의 상한은 환경 state와 서울 리전 EC2·ECR이다. IAM·STS 권한은 얻지 못한다([0005](decisions/0005-github-role-boundary.md)).
-- **사람의 운영 역할:** MFA 세션만 신뢰하고 state 버킷, OIDC 제공자, GitHub 역할의 정책을 관리한다. boundary는 읽기만 하고 제거·교체하지 못한다. 자기 역할·사용자·Budget·boundary 변경은 root로 적용한다([0004](decisions/0004-human-operator-access.md)). 프로젝트 인프라 전체를 바꿀 수 있으므로 일상 배포에는 쓰지 않는다.
-- **네트워크:** ALB 보안 그룹의 공개 ingress는 닫혀 있다. ECS 호스트 보안 그룹은 ALB에서 오는 동적 포트만 받고 SSH는 열지 않는다.
-- **한계:** 두 환경은 IAM과 계정 한도를 공유한다. 현재 적용 workflow는 신규 생성만 허용하고, 승인 시점의 plan과 적용되는 plan이 같다는 보장이 없다([0003](decisions/0003-protected-apply.md)).
+권한 정책이 무엇을 허용하고 거부해야 하는지는 [`infra/bootstrap/policy-tests/`](../infra/bootstrap/policy-tests/iam.test.mjs)의 테스트가 기준이다. bootstrap을 적용할 때마다 `scripts/bootstrap.sh plan`이 이 테스트를 실행한다.
+
+- **state 버킷** ([`main.tf`](../infra/bootstrap/main.tf)): 공개 접근 차단, HTTPS 강제, 암호화, 버전 관리.
+- **GitHub OIDC 역할** ([`main.tf`](../infra/bootstrap/main.tf), [`apply.tf`](../infra/bootstrap/apply.tf)): 저장소 immutable subject와 GitHub 환경 이름으로 신뢰를 제한하고, 환경별 plan·apply 역할이 자기 환경만 다룬다.
+- **permissions boundary** ([`boundary.tf`](../infra/bootstrap/boundary.tf)): 모든 GitHub 역할의 상한. IAM·STS 권한은 얻지 못한다.
+- **사람의 운영 역할** ([`operator.tf`](../infra/bootstrap/operator.tf)): MFA 세션만 신뢰한다. 프로젝트 인프라 전체를 바꿀 수 있으므로 일상 배포에는 쓰지 않는다.
+- **GitHub 환경 승인** ([`scripts/check-github-settings.sh`](../scripts/check-github-settings.sh)): 1인 저장소라 자기 승인을 허용한다.
+- **적용 workflow의 한계** ([`apply-foundation.yml`](../.github/workflows/apply-foundation.yml)): 신규 생성만 적용할 수 있고, 승인한 plan과 적용되는 plan이 묶여 있지 않다.

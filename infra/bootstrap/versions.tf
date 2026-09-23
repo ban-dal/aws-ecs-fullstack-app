@@ -9,6 +9,8 @@ terraform {
   }
 }
 
+# No default_tags here: changing tags on every resource defers all IAM policy
+# data sources to apply time, which hides policy JSON from the saved plan.
 provider "aws" {
   region              = var.aws_region
   allowed_account_ids = [var.expected_account_id]
@@ -36,7 +38,7 @@ variable "state_bucket_name" {
 
 variable "github_repository_subject" {
   type        = string
-  description = "GitHub OIDC sub의 repo 접두사. 저장소의 immutable subject 값을 확인한다."
+  description = "GitHub OIDC sub의 repo 접두사. 소유자·저장소의 immutable ID를 포함해 이름이 바뀌어도 신뢰가 넘어가지 않는다."
   default     = "repo:ban-dal@46153202/aws-ecs-fullstack-app@1382568125"
 
   validation {

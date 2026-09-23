@@ -1,6 +1,10 @@
 # Upper limit for every GitHub OIDC role. The bootstrap operator can edit those
 # roles but not this policy, so a widened role policy or trust policy still
 # cannot reach IAM, STS, or resources outside the project state and region.
+# Limits are per service; the role policies narrow them to actions. A pull
+# request that adds an AWS service widens this boundary and is applied by root.
+# When a GitHub role must pass a role (ECS instance or task roles), create that
+# role here in bootstrap and add iam:PassRole for its ARN only.
 data "aws_iam_policy_document" "github_boundary" {
   statement {
     sid       = "ListStateBucket"

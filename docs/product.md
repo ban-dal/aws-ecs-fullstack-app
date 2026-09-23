@@ -15,7 +15,7 @@ AI를 활용해 기획, 디자인, 개발, 인프라와 운영을 하나의 저�
 
 ## 구현 범위
 
-진행 상황은 [README의 현재 상태](../README.md#현재-상태)를 본다.
+적용 상태는 [README](../README.md#적용-상태-확인)를 본다.
 
 - 실행 가능한 Next.js 앱, Node.js 22, pnpm workspaces, health API와 앱 CI.
 - Terraform 원격 state, GitHub OIDC 역할, 선택형 비용 Budget, 사람의 비루트 운영 역할.

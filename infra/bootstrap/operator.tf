@@ -1,3 +1,13 @@
+# Human access for bootstrap work. The IAM user can only sign in, manage its own
+# MFA, and assume the operator role; the role trusts only MFA sessions. An IAM
+# Identity Center account instance cannot grant AWS account access, and AWS
+# Organizations would end this account's Free plan credits, so a plain IAM user
+# is used. The console accepts a passkey, but the CLI and API do not: role
+# assumption needs an authenticator app (TOTP) device named after the user.
+#
+# Changes outside this role's own policy are applied with the account root
+# session; docs/operations.md lists which ones.
+
 locals {
   # Role names are fixed so the Deny statements also cover a deleted and
   # recreated role.
@@ -186,6 +196,14 @@ data "aws_iam_policy_document" "operator_permissions" {
     sid       = "ReadProjectBudget"
     actions   = ["budgets:ListTagsForResource", "budgets:ViewBudget"]
     resources = ["arn:aws:budgets::${data.aws_caller_identity.current.account_id}:budget/aws-fullstack-lab-monthly"]
+  }
+
+  # Lets scripts/bootstrap.sh run the policy tests before an apply. The
+  # simulator only evaluates policies passed in the request.
+  statement {
+    sid       = "SimulateBootstrapPolicies"
+    actions   = ["iam:SimulateCustomPolicy"]
+    resources = ["*"]
   }
 
   statement {
