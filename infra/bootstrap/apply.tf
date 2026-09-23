@@ -1,8 +1,8 @@
 locals {
   ec2_arn_prefix = "arn:aws:ec2:${var.aws_region}:${local.account_id}"
 
-  # Resources the foundation module creates. Each must carry the environment's
-  # Environment tag at creation, which later limits changes to that environment.
+  # 서비스 기반 모듈이 만드는 리소스다. 생성할 때 자기 환경의 Environment 태그가
+  # 있어야 하고, 이후 변경도 이 태그로 해당 환경에만 허용된다.
   foundation_create_actions = [
     "ec2:CreateInternetGateway",
     "ec2:CreateRouteTable",
@@ -121,8 +121,8 @@ data "aws_iam_policy_document" "foundation_apply" {
     }
   }
 
-  # The parent VPC is authorized separately so a tagged child cannot be placed
-  # in another environment's VPC.
+  # 부모 VPC를 따로 검사해, 자기 태그를 붙인 하위 리소스라도 다른 환경의 VPC
+  # 안에는 만들지 못하게 한다.
   statement {
     sid = "CreateInOwnVpc"
     actions = [
@@ -189,8 +189,8 @@ data "aws_iam_policy_document" "foundation_apply" {
     }
   }
 
-  # Security group rules are untagged child resources; the parent group is
-  # still checked by ManageOwnNetwork.
+  # 보안 그룹 규칙은 태그가 없는 하위 리소스다. 부모 보안 그룹은
+  # ManageOwnNetwork에서 여전히 태그로 검사한다.
   statement {
     sid = "ManageRulesOfOwnSecurityGroups"
     actions = [

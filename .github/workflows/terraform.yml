@@ -22,8 +22,8 @@ jobs:
       - run: terraform -chdir=infra/plan validate
 
   plan:
-    # Fork PRs never get AWS credentials. Same-repository PRs still wait for a
-    # *-plan environment approval before the branch code runs with the plan role.
+    # fork PR은 AWS 자격을 받지 않는다. 같은 저장소의 PR도 브랜치 코드가 plan 역할로
+    # 실행되기 전에 *-plan 환경 승인을 기다린다.
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository &&
       vars.TF_STATE_BUCKET != '' &&

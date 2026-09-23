@@ -1,10 +1,10 @@
-// Executable statement of the bootstrap IAM intent. Each case evaluates the
-// policies in a saved bootstrap plan with the IAM policy simulator, so a policy
-// change that breaks an intended boundary fails before it is applied.
+// bootstrap IAM 권한의 의도를 실행 가능한 형태로 적은 테스트다. 각 사례는 저장된
+// bootstrap plan의 정책을 IAM 정책 시뮬레이터로 판정한다. 의도한 경계를 깨는 정책
+// 변경은 적용되기 전에 여기서 실패한다.
 //
-// Run through scripts/bootstrap.sh plan, or directly:
-//   PLAN_JSON=<terraform show -json output> node --test infra/bootstrap/policy-tests/
-// Requires AWS credentials allowed to call iam:SimulateCustomPolicy.
+// scripts/bootstrap.sh plan에서 실행되며, 직접 실행할 수도 있다.
+//   PLAN_JSON=<terraform show -json 출력> node --test infra/bootstrap/policy-tests/*.test.mjs
+// iam:SimulateCustomPolicy를 호출할 수 있는 AWS 자격 증명이 필요하다.
 
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";

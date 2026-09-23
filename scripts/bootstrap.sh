@@ -1,16 +1,14 @@
 #!/usr/bin/env bash
-# Plan and apply infra/bootstrap from a local session.
+# 로컬 세션에서 infra/bootstrap을 plan하고 apply한다.
 #
-# The bootstrap root creates the GitHub OIDC roles themselves, so it cannot be
-# applied by a workflow. After the pull request merges, a person runs `plan`,
-# compares the summary with the scope written in the pull request, and then
-# runs `apply` on the same saved plan. Post the apply summary as a comment on
-# that pull request.
+# bootstrap 루트는 GitHub OIDC 역할 자체를 만들기 때문에 workflow로 적용할 수 없다.
+# PR이 merge되면 사람이 `plan`을 실행해 요약을 PR에 적힌 범위와 비교하고, 같은 저장
+# plan으로 `apply`를 실행한다. apply 요약은 그 PR에 댓글로 남긴다.
 #
-#   scripts/bootstrap.sh plan    # any branch: saved plan, change summary, policy tests
-#   scripts/bootstrap.sh apply   # main only: applies the saved plan from `plan`
+#   scripts/bootstrap.sh plan    # 모든 브랜치: 저장 plan, 변경 요약, 정책 테스트
+#   scripts/bootstrap.sh apply   # main 전용: `plan`이 만든 저장 plan을 적용
 #
-# Which profile applies which change is listed in docs/operations.md.
+# 어떤 변경을 어떤 프로필로 적용하는지는 docs/operations.md에 있다.
 set -euo pipefail
 
 root="$(git rev-parse --show-toplevel)"
@@ -41,7 +39,7 @@ plan() {
   rm -rf "$work"
   mkdir -m 700 "$work"
   git -C "$root" rev-parse HEAD > "$work/commit"
-  # A plan of uncommitted code is fine for review but must not be applied.
+  # 커밋하지 않은 코드의 plan은 검토용으로는 괜찮지만 적용해서는 안 된다.
   [[ -z "$(git -C "$root" status --porcelain -- infra/bootstrap)" ]] || touch "$work/dirty"
   echo "caller: $(aws sts get-caller-identity --query Arn --output text)"
   echo "commit: $(cat "$work/commit")"
