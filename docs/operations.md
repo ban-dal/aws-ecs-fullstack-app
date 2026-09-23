@@ -61,6 +61,8 @@ terraform -chdir=infra/bootstrap output
 
 GitHub 환경 `preprod-plan`, `prod-plan`을 만들고 승인 규칙을 설정한다. 저장소 변수 `TF_STATE_BUCKET`, `AWS_PLAN_ROLE_ARN`, `AWS_ACCOUNT_ID`에는 bootstrap output 값을, `AWS_REGION`에는 버킷 리전을 넣는다. 앞의 세 변수 중 하나라도 없으면 PR의 AWS plan 작업은 건너뛴다. fork PR도 AWS 자격 증명을 받지 않는다. 이 저장소에서 온 PR은 환경 승인 후에만 plan 역할을 사용하도록 환경 보호를 설정한다. plan은 호출한 AWS 계정 ID가 bootstrap 계정과 같은지도 확인한다.
 
+1인 저장소에서는 PR 작성자가 자신의 PR에 Approve할 수 없는 것과 GitHub 환경 작업을 승인하는 것은 다른 규칙이다. 환경의 자기 승인 방지(`prevent_self_review`)를 켜면 작업을 시작한 계정 외에 승인자가 필요하다. 이를 끄면 같은 계정이 환경 작업을 승인할 수 있으나 독립 검토는 이루어지지 않는다. 승인 정책을 먼저 결정하고 환경 보호를 설정한 다음 저장소 변수를 등록한다. 결정과 실제 설정은 [Task 002](tasks/002-github-pr-plan-setup.md)에 기록한다.
+
 현재 OIDC 역할은 환경별 `preprod/terraform.tfstate`, `prod/terraform.tfstate` 읽기와 잠금 파일 작업에만 접근한다. GitHub Actions는 장기 AWS 키를 저장하지 않는다. 향후 서비스 리소스를 추가할 때 provider의 필요한 읽기 권한을 검토해 role policy를 늘린다.
 
 ## 3. 배포와 확인
