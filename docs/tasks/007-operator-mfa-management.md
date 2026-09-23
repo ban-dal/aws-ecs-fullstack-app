@@ -2,7 +2,7 @@
 
 | 항목 | 값 |
 | --- | --- |
-| PR | 생성 후 링크 입력 |
+| PR | [#7 · 운영자 MFA 자기 관리 권한 보완](https://github.com/ban-dal/aws-ecs-fullstack-app/pull/7) |
 | 작업 브랜치 | `fix/operator-mfa-management` |
 | 상태 | 진행 중 |
 | 시작일 | 2026-09-24 |
