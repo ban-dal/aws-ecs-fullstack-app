@@ -5,7 +5,7 @@
 ## 기본 원칙
 
 - 목표와 사용자 동작은 `docs/product.md`, 화면과 접근성 기준은 `docs/design.md`, 리소스와 경계는 `docs/architecture.md`, 배포와 장애 대응은 `docs/operations.md`를 기준으로 한다.
-- Next.js 앱은 `apps/web`에 둔다. 후속 Terraform 구현은 `infra/bootstrap`과 환경별 live 구성으로 나누고, 새 공유 패키지는 `packages/*`에 둔다.
+- Next.js 앱은 `apps/web`에 둔다. Terraform 기반은 `infra/bootstrap`, 환경별 PR plan은 `infra/plan`에 둔다. 후속 서비스 구성은 별도 live 디렉터리로 분리하고, 새 공유 패키지는 `packages/*`에 둔다.
 - 현재는 pnpm workspaces만 사용한다. 빌드 단계가 복잡해질 때 Turbo를 추가한다.
 - AWS 리소스나 비용을 늘리는 변경은 예상 비용, 종료 방법, 무료 플랜 영향, PR plan 결과를 설명한다. `enable_public_app`의 기본값은 `false`로 유지한다.
 - Terraform state, `.tfvars`, 계정 비밀, AWS 자격 증명은 커밋하지 않는다. GitHub Actions는 OIDC를 사용한다.
@@ -16,9 +16,11 @@
 
 - 테스트를 새로 쓰거나 이름을 바꿀 때 `it`/`test` 제목은 한국어로 입력·상황과 예상 결과를 모두 포함한다. 예: `GET /api/health는 ok 상태를 반환한다`.
 - 요청 범위의 실제 사용자 동작 또는 회귀 위험을 검증하는 테스트만 추가한다. 낮은 영향의 단순 속성·클래스 확인 테스트는 만들지 않는다.
-- 앱 변경에는 `pnpm typecheck`, `pnpm build`를 실행한다. Terraform이 추가되면 `terraform fmt -check -recursive infra`와 `terraform validate`도 실행한다.
+- 앱 변경에는 `pnpm typecheck`, `pnpm build`를 실행한다. Terraform 변경에는 `terraform fmt -check`와 수정한 루트 모듈의 `terraform validate`를 실행한다.
 - 브라우저 동작은 필요한 경우 실제 브라우저에서 확인하고 검증 범위를 명시한다.
 
 ## AI 작업 기록
 
 큰 변경은 목적, 선택한 대안, 구현, 검증, 비용과 남은 제약을 PR에 남긴다. 새로운 서비스나 제품 가정을 도입할 때는 `docs/`에 결정과 근거를 기록한다. AI가 작성한 계획과 코드는 사람의 PR 리뷰를 거쳐야 한다.
+
+PR 하나를 Task 하나로 다루고 `docs/tasks/NNN-주제.md`에 목표·실제 작업·검증·재구성 절차·다음 Task를 기록한다. PR 본문에서 해당 문서를 연결한다. PR merge를 Task 완료 시점으로 삼고, merge 확인 후 다음 Task 브랜치의 첫 변경에서 이전 Task의 완료일·merge commit을 채운 뒤 다음 순번 문서를 `docs/tasks/_template.md`에서 생성한다. `docs/tasks/README.md` 목록도 함께 갱신한다.

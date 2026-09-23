@@ -1,3 +1,6 @@
-# 인프라 계획
+# 인프라 구성
 
-이번 초기 커밋에는 인프라 구현을 포함하지 않는다. Terraform 코드는 후속 PR에서 `bootstrap`과 `preprod`/`prod` 환경으로 나누어 추가한다. 대상 리소스와 배포 흐름은 `docs/architecture.md`, 비용·운영 조건은 `docs/operations.md`를 따른다.
+- `bootstrap`: S3 state 버킷, GitHub OIDC plan 역할, 선택형 월간 비용 Budget. AWS 적용은 별도 운영 단계다.
+- `plan`: 비용을 발생시키는 리소스 없이 AWS 계정 식별과 환경별 원격 state 연결을 검증하는 PR plan 구성.
+
+VPC와 앱 서비스는 후속 PR에서 추가한다. 운영 절차는 `docs/operations.md`를 따른다.

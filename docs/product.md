@@ -18,10 +18,15 @@ AI를 활용해 기획, 디자인, 개발, 인프라와 운영을 하나의 저�
 - 실행 가능한 Next.js 앱, Node.js 22, pnpm workspaces, health API.
 - `AGENTS.md`, 기획·디자인·아키텍처·운영 문서와 앱 CI.
 
+## Terraform 기반 Task 범위
+
+- 원격 state 버킷, GitHub OIDC plan 역할, 선택형 비용 Budget의 Terraform 코드.
+- PR의 fmt·validate와 GitHub 환경 설정 이후 `preprod`·`prod` plan. 2026-09-23에 bootstrap의 AWS apply와 S3 state 이전을 완료했다. 앱 서비스 apply는 아직 실행하지 않았다.
+
 ## 후속 구현 범위
 
 - Terraform의 VPC, 공개·비공개 서브넷, 보안 그룹, ECR, ECS on EC2, ALB, ACM HTTPS, Route 53 DNS, S3 비공개 버킷, Lambda 예제.
-- `preprod`/`prod` state와 리소스 분리. PR 검증과 GitHub OIDC 기반 배포.
+- `preprod`/`prod` 서비스 리소스 분리와 GitHub OIDC 기반 apply 배포.
 - 비용이 큰 공개 경로를 스위치로 관리하고, 운영 문서에 생성·종료 절차를 기록.
 
 ## 현 단계 범위 밖
