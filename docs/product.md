@@ -13,23 +13,16 @@ AI를 활용해 기획, 디자인, 개발, 인프라와 운영을 하나의 저�
 | 리뷰어 | PR의 앱·인프라 영향 파악 | 빌드, fmt, validate, 환경별 plan 확인 |
 | 운영자 | preprod 확인 후 실험용 prod 승격 | merge 후 preprod, 승인 후 prod 배포 및 종료 가능 |
 
-## 초기 커밋 범위
+## 구현 범위
 
-- 실행 가능한 Next.js 앱, Node.js 22, pnpm workspaces, health API.
-- `AGENTS.md`, 기획·디자인·아키텍처·운영 문서와 앱 CI.
+적용 상태는 [README](../README.md#적용-상태-확인)를 본다.
 
-## Terraform 기반 Task 범위
-
-- 원격 state 버킷, GitHub OIDC plan 역할, 선택형 비용 Budget의 Terraform 코드.
-- PR의 fmt·validate와 GitHub 환경 설정 이후 `preprod`·`prod` plan. 2026-09-23에 bootstrap의 AWS apply와 S3 state 이전, `preprod` 서비스 기반 적용을 완료했다. 앱 배포와 `prod` 기반 적용은 아직 진행하지 않았다.
-
-## 후속 구현 범위
-
-- Task 003에서 Terraform의 VPC, 공개·비공개 서브넷, 보안 그룹, 비공개 ECR 코드를 준비했고 Task 005에서 보호된 경로로 `preprod`에 적용했다.
-- Task 006에서 사람의 비루트 운영 자격을 준비했고 Task 007에서 MFA·CLI 역할 수임을 검증했다.
-- 이후 ECS on EC2, ALB, ACM HTTPS, Route 53 DNS, S3 비공개 버킷, Lambda 예제를 추가한다.
-- `preprod`/`prod` 서비스 리소스 분리와 GitHub OIDC 기반 apply 배포.
-- 비용이 큰 공개 경로를 스위치로 관리하고, 운영 문서에 생성·종료 절차를 기록.
+- 실행 가능한 Next.js 앱, Node.js 22, pnpm workspaces, health API와 앱 CI.
+- Terraform 원격 state, GitHub OIDC 역할, 선택형 비용 Budget, 사람의 비루트 운영 역할.
+- PR의 fmt·validate와 `preprod`·`prod` plan, `main`에서만 실행하는 보호된 환경별 apply.
+- 환경별 VPC, 공개·비공개 서브넷, 보안 그룹, 비공개 ECR.
+- ECS on EC2, ALB, ACM HTTPS, Route 53 DNS, S3 비공개 버킷, Lambda 예제.
+- 비용이 큰 공개 경로를 스위치로 관리하고, 운영 문서에 생성·종료 절차를 둔다.
 
 ## 현 단계 범위 밖
 

@@ -1,6 +1,15 @@
+# 사람이 bootstrap을 운영하기 위한 접근 경로다. IAM 사용자는 로그인, 자기 MFA
+# 관리, 운영 역할 수임만 할 수 있고, 운영 역할은 MFA 세션만 신뢰한다. IAM
+# Identity Center의 account instance는 AWS 계정 접근 권한을 줄 수 없고, AWS
+# Organizations에 가입하면 이 계정의 Free plan 크레딧이 끝나므로 일반 IAM
+# 사용자를 쓴다. 콘솔은 패스키를 받지만 CLI/API는 받지 않으므로, 역할 수임에는
+# 사용자 이름과 같은 이름의 인증 앱(TOTP) 장치가 필요하다.
+#
+# 이 역할 정책의 권한 밖인 변경은 계정 root 세션으로 적용한다. 어떤 변경인지는
+# docs/operations.md에 있다.
+
 locals {
-  # Role names are fixed so the Deny statements also cover a deleted and
-  # recreated role.
+  # 역할 이름을 고정해 두어야 역할을 삭제한 뒤 다시 만들어도 Deny가 적용된다.
   github_role_arns = [
     for name in concat(
       [for environment in local.environments : "aws-fullstack-lab-${environment}-plan"],
@@ -18,8 +27,8 @@ resource "aws_iam_user" "operator" {
   }
 }
 
-# The console password and MFA device are enrolled outside Terraform so neither
-# the password nor its recovery material enters state or a pull request.
+# 콘솔 비밀번호와 MFA 장치는 Terraform 밖에서 등록한다. 비밀번호와 복구 자료가
+# state나 PR에 들어가지 않게 하기 위해서다.
 resource "aws_iam_user_policy_attachment" "operator_login" {
   user       = aws_iam_user.operator.name
   policy_arn = "arn:aws:iam::aws:policy/SignInLocalDevelopmentAccess"
@@ -186,6 +195,14 @@ data "aws_iam_policy_document" "operator_permissions" {
     sid       = "ReadProjectBudget"
     actions   = ["budgets:ListTagsForResource", "budgets:ViewBudget"]
     resources = ["arn:aws:budgets::${data.aws_caller_identity.current.account_id}:budget/aws-fullstack-lab-monthly"]
+  }
+
+  # scripts/bootstrap.sh가 apply 전에 정책 테스트를 실행하기 위한 권한이다.
+  # 시뮬레이터는 요청에 넣은 정책을 판정할 뿐 권한을 주지 않는다.
+  statement {
+    sid       = "SimulateBootstrapPolicies"
+    actions   = ["iam:SimulateCustomPolicy"]
+    resources = ["*"]
   }
 
   statement {

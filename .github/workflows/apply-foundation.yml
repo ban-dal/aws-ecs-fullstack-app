@@ -1,3 +1,10 @@
+# merge된 main에서만 한 환경의 infra/plan을 적용한다. merge만으로는 배포되지 않는다.
+# plan과 apply는 서로 다른 OIDC 역할과 GitHub 환경을 쓴다. plan 파일에는 민감한 값이
+# 들어갈 수 있으므로 저장 plan은 runner 밖으로 내보내지 않는다.
+#
+# 알려진 한계: 아래 검사는 module.service_foundation의 신규 생성만 허용하므로 수정,
+# 교체, 삭제는 아직 여기서 적용할 수 없다. apply 작업은 승인 뒤에 plan을 다시
+# 만들기 때문에, 승인한 plan과 적용되는 plan이 묶여 있지 않다.
 name: Apply service foundation
 
 on:
