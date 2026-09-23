@@ -85,9 +85,11 @@ scripts/check-github-settings.sh
 
 ## 4. 서비스 기반 적용
 
+PR에서는 두 환경의 plan 요약과 바뀐 인프라 파일이 PR 댓글 하나에 올라오고, push할 때마다 갱신된다. 적용 workflow가 막는 변경이 있으면 그 댓글에 표시된다.
+
 1. GitHub Actions에서 `Apply service foundation`을 `main`의 환경 하나로 실행한다.
-2. `*-plan`을 승인하고 로그의 변경과 AWS 계정을 확인한다.
-3. `*-apply`를 승인한다. 적용 작업은 plan을 다시 만들고, `module.service_foundation` 안의 신규 생성만 있을 때 그 plan을 적용한다. 수정·교체·삭제가 있으면 실패한다. 이 제한의 이유와 한계는 [workflow 주석](../.github/workflows/apply-foundation.yml)에 있다.
+2. `*-plan`을 승인한다. 실행 화면의 요약에서 변경과 검사 결과를 확인한다.
+3. `*-apply`를 승인한다. 적용 작업은 plan을 다시 만들어, 승인한 plan과 변경 내용이 같을 때만 적용한다. 그사이 인프라가 바뀌었으면 적용하지 않고 실패하므로 workflow를 다시 실행한다. 서비스 기반 모듈 안의 생성·수정만 허용하고 삭제·교체는 막는다([`scripts/tfplan.sh`](../scripts/tfplan.sh)).
 4. 적용 기록은 GitHub Deployments의 `*-apply` 환경에 자동으로 남는다. 계기가 된 PR에 실행 링크를 댓글로 남긴다.
 
 `prod`는 `preprod` 결과와 비용을 검토한 뒤 따로 결정한다. 서비스 기반 plan은 PR이나 이 workflow의 plan 단계에서 확인한다. 운영 역할에는 EC2 읽기 권한이 없어 로컬 `infra/plan` plan은 지원하지 않는다.

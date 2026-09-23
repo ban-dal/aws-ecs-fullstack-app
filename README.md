@@ -37,10 +37,9 @@ pnpm dev
 
 ## 다음 단계
 
-1. 적용 workflow 개선: 신규 생성 전용 검사를 삭제·교체 차단 중심으로 바꾸고, 승인한 plan과 적용 plan을 묶는다. 액션 SHA 고정, `infra/plan`의 `allowed_account_ids`, PR plan 댓글을 추가한다.
-2. 서비스 기반 보강: ECR `scan_on_push`, 보안 그룹 규칙 분리, provider `default_tags`.
-3. `prod` 서비스 기반 적용.
-4. 이미지 빌드·push, ECS on EC2, ALB·ACM·Route 53(공개 스위치 `enable_public_app` 기본 `false`), 배포 흐름과 종료 절차, S3·Lambda 예제를 비용 선택지와 함께 추가한다.
+1. 서비스 기반 보강: ECR `scan_on_push`, 보안 그룹 규칙 분리, provider `default_tags`.
+2. `prod` 서비스 기반 적용.
+3. 이미지 빌드·push, ECS on EC2, ALB·ACM·Route 53(공개 스위치 `enable_public_app` 기본 `false`), 배포 흐름과 종료 절차, S3·Lambda 예제를 비용 선택지와 함께 추가한다.
 
 ## 문서
 
