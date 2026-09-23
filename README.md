@@ -1,6 +1,6 @@
 # AWS 풀스택 실험실
 
-Next.js 앱과 AWS 인프라를 한 저장소에서 관리하는 프로젝트다. Terraform state 버킷·GitHub OIDC plan 역할·비용 Budget의 bootstrap은 적용했으며, 서비스 배포와 GitHub PR plan 설정은 아직 진행 중이다.
+Next.js 앱과 AWS 인프라를 한 저장소에서 관리하는 프로젝트다. Terraform state 버킷·GitHub OIDC plan 역할·비용 Budget의 bootstrap과 GitHub plan 환경·변수 설정을 완료했다. PR에서 실제 plan 실행을 검증 중이며 서비스 배포는 아직 진행하지 않았다.
 
 ## 구성
 

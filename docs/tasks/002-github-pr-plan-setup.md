@@ -4,7 +4,7 @@
 | --- | --- |
 | PR | [#2 · GitHub PR plan 환경 구성](https://github.com/ban-dal/aws-ecs-fullstack-app/pull/2) (Draft) |
 | 작업 브랜치 | `feat/github-pr-plan-setup` |
-| 상태 | 진행 중 |
+| 상태 | 진행 중: 환경·변수 설정 완료, PR plan 검증 대기 |
 | 시작일 | 2026-09-23 |
 | 완료일·merge commit | PR merge 후 기록 |
 
@@ -16,8 +16,8 @@ Task 001에서 만든 GitHub OIDC plan 역할을 실제 PR에서 사용한다. `
 
 ## 작업 내용과 결정
 
-- `preprod-plan`, `prod-plan` GitHub 환경을 만들고 수동 승인 규칙을 설정한다. 1인 저장소이므로 환경 배포의 자기 승인 허용 여부를 먼저 결정한다. PR 자체의 Approve와 환경 배포 승인은 서로 다른 기능이다.
-- `TF_STATE_BUCKET`, `AWS_PLAN_ROLE_ARN`, `AWS_ACCOUNT_ID`, `AWS_REGION` 저장소 변수를 Task 001의 Terraform output과 대조해 등록한다. AWS 키·토큰은 GitHub에 저장하지 않는다.
+- `preprod-plan`, `prod-plan` GitHub 환경을 만들고 `ban-dal`을 필수 승인자로 지정했다. 사용자 선택에 따라 환경 작업의 자기 승인을 허용했다(`prevent_self_review=false`). PR 자체의 Approve와 환경 배포 승인은 서로 다른 기능이다.
+- `TF_STATE_BUCKET`, `AWS_PLAN_ROLE_ARN`, `AWS_ACCOUNT_ID`, `AWS_REGION` 저장소 변수를 Task 001의 Terraform output과 대조해 등록하고 다시 읽어 확인했다. AWS 키·토큰은 GitHub에 저장하지 않았다.
 - PR 검증 결과와 이후 재구성 방법을 `docs/operations.md`와 이 문서에 기록한다.
 
 ### 확인한 bootstrap output
@@ -29,13 +29,13 @@ Task 001에서 만든 GitHub OIDC plan 역할을 실제 PR에서 사용한다. `
 | `AWS_ACCOUNT_ID` | `065768154598` |
 | `AWS_REGION` | `ap-northeast-2` |
 
-2026-09-23에 원격 Terraform state의 output과 대조했다. 현재 GitHub 환경과 저장소 변수는 모두 미설정이다.
+2026-09-23에 원격 Terraform state의 output과 대조했고, 두 환경을 먼저 설정한 뒤 네 저장소 변수를 등록했다.
 
 ### 환경 승인 정책 결정
 
-GitHub의 **배포 환경 승인**은 PR Approve와 별개다. 환경의 `prevent_self_review=false`는 작업을 시작한 계정도 그 환경 작업을 승인하도록 허용한다. 1인 운영에 편리하지만 독립된 두 번째 검토자가 없으므로 명시적 선택이 필요하다. `prevent_self_review=true`를 유지하려면 작업을 시작한 계정 외에 신뢰할 수 있는 검토자가 필요하다. [GitHub 환경 보호 규칙](https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments)을 참고한다.
+GitHub의 **배포 환경 승인**은 PR Approve와 별개다. 1인 운영을 위해 사용자가 `ban-dal` 계정의 수동 환경 승인을 선택했다. 두 환경 모두 `ban-dal`을 필수 승인자로 설정하고 `prevent_self_review=false`로 확인했다. 각 plan은 사람이 승인해야 시작하지만 독립된 두 번째 검토자는 없다. [GitHub 환경 보호 규칙](https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments)을 참고한다.
 
-환경 승인 정책이 정해지기 전에는 환경과 저장소 변수를 생성하지 않는다. 변수만 먼저 등록하면 PR의 AWS plan이 승인 규칙 없이 실행될 수 있기 때문이다.
+환경 보호 규칙을 먼저 설정하고 저장소 변수를 등록했다. 변수만 먼저 등록하면 PR의 AWS plan이 승인 규칙 없이 실행될 수 있기 때문이다.
 
 ## 재구성 절차
 
@@ -45,7 +45,7 @@ GitHub의 **배포 환경 승인**은 PR Approve와 별개다. 환경의 `preven
 
 ## 검증과 운영 영향
 
-- 아직 실제 PR plan 검증 전이다. 환경 승인 정책을 결정하고 결과를 확인한 뒤 여기에 기록한다.
+- 아직 실제 PR plan 검증 전이다. PR #2에서 두 환경 작업을 수동 승인하고 결과를 확인한 뒤 여기에 기록한다.
 - 이 Task의 GitHub 설정 자체는 AWS 리소스를 생성하지 않는다. plan이 사용하는 S3 요청과 잠금 파일에는 사용량에 따른 비용이 생길 수 있다.
 
 ## 남은 사항과 다음 Task
