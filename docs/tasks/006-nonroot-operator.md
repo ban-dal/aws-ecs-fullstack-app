@@ -2,7 +2,7 @@
 
 | 항목 | 값 |
 | --- | --- |
-| PR | 생성 후 링크 입력 |
+| PR | [#6 · 비루트 bootstrap 운영 주체 준비](https://github.com/ban-dal/aws-ecs-fullstack-app/pull/6) |
 | 작업 브랜치 | `feat/nonroot-operator` |
 | 상태 | 진행 중: 코드·운영 절차 작성, AWS 미적용 |
 | 시작일 | 2026-09-23 |
