@@ -1,6 +1,6 @@
 # 아키텍처
 
-> 아래 앱 서비스 구조는 목표 아키텍처다. state 버킷·OIDC·비용 Budget과 `preprod` 서비스 기반, Task 006의 비루트 운영 IAM 사용자·역할은 AWS에 적용했다. 비루트 CLI 역할 수임 검증은 진행 중이다.
+> 아래 앱 서비스 구조는 목표 아키텍처다. state 버킷·OIDC·비용 Budget과 `preprod` 서비스 기반, Task 006의 비루트 운영 IAM 사용자·역할은 AWS에 적용했다. Task 007에서 인증 앱 MFA로 비루트 CLI 역할 수임과 변경 없는 bootstrap plan을 검증했다.
 
 ```mermaid
 flowchart LR

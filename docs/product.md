@@ -26,7 +26,7 @@ AI를 활용해 기획, 디자인, 개발, 인프라와 운영을 하나의 저�
 ## 후속 구현 범위
 
 - Task 003에서 Terraform의 VPC, 공개·비공개 서브넷, 보안 그룹, 비공개 ECR 코드를 준비했고 Task 005에서 보호된 경로로 `preprod`에 적용했다.
-- Task 006에서 사람의 비루트 운영 자격을 준비하고 MFA·CLI 역할 수임을 검증한다.
+- Task 006에서 사람의 비루트 운영 자격을 준비했고 Task 007에서 MFA·CLI 역할 수임을 검증했다.
 - 이후 ECS on EC2, ALB, ACM HTTPS, Route 53 DNS, S3 비공개 버킷, Lambda 예제를 추가한다.
 - `preprod`/`prod` 서비스 리소스 분리와 GitHub OIDC 기반 apply 배포.
 - 비용이 큰 공개 경로를 스위치로 관리하고, 운영 문서에 생성·종료 절차를 기록.

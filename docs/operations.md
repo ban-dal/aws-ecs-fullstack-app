@@ -171,6 +171,12 @@ bootstrap 적용 후 `foundation_apply_role_arns`의 `preprod`·`prod` 값을 �
 
 PR #6 merge commit `ffffc4b7dd90d10922c6d2d051f95c956d1816e7`의 `main`에서 root MFA와 계정·S3 원격 state를 확인했다. 저장 plan은 IAM 사용자·역할·정책 등 5개 생성, 기존 변경·삭제 0개였고 사용자 승인 후 그대로 적용했다. 사후 bootstrap plan은 변경 없음(종료 코드 0)이었으며 저장 plan은 삭제했다. IAM 사용자의 콘솔 로그인과 패스키 MFA, `aws login`의 IAM 사용자 호출 주체를 확인했다. 패스키만으로는 CLI 역할 수임이 거절됐고 자기 MFA 관리 권한도 부족해 TOTP 추가가 막혔다. Task 007에서 정책을 보완한 뒤 비루트 검증을 마친다.
 
+#### 2026-09-24 Task 007 적용과 비루트 검증 기록
+
+- PR #7 merge commit `5307e3357c8dcf3279cf626dec1631b83b8dba89`의 `main`에서 계정 `065768154598`의 root 세션으로 bootstrap 저장 plan을 만들었다. `aws_iam_user_policy.operator`, `aws_iam_role_policy.operator` **2개 수정, 생성·삭제 0개**였고 정책 statement가 PR과 일치하는 것을 확인했다. 사용자 요청에 따라 Codex가 저장 plan을 그대로 적용했으며 결과도 2개 수정이었다. 저장 plan은 삭제했고 사후 plan은 변경 없음(종료 코드 0)이었다.
+- 사용자가 콘솔에서 인증 앱(TOTP) 장치 `arn:aws:iam::065768154598:mfa/aws-fullstack-lab-operator`를 등록했다. 콘솔용 패스키는 유지한다.
+- 사용자가 TOTP 코드를 입력해 `aws-fullstack-lab-bootstrap-operator` 역할을 수임했다. 그 세션을 쓰는 `aws-fullstack-operator-terraform` 프로필로 실행한 bootstrap plan은 권한 오류 없이 변경 없음(종료 코드 0)이었다. 이로써 비루트 bootstrap 운영 경로를 검증했다. root 브라우저·CLI 세션 종료는 사용자가 직접 수행한다.
+
 ### 비루트 CLI 프로필
 
 AWS CLI v2.32.0 이상에서 IAM 사용자로 로그인한다. 브라우저에 root 세션이 남아 있으면 `aws login`이 그 세션을 선택할 수 있으므로 첫 `get-caller-identity` 결과의 ARN이 반드시 `user/aws-fullstack-lab-operator`인지 확인한다. 다르면 로그아웃한 뒤 IAM 사용자로 다시 로그인한다. CLI의 `mfa_serial`에는 패스키 ARN이 아닌 인증 앱(TOTP) MFA ARN을 쓴다. ARN은 해당 사용자 IAM 보안 자격 증명 화면에서 확인한다.
@@ -186,8 +192,11 @@ aws configure set role_arn arn:aws:iam::065768154598:role/aws-fullstack-lab-boot
 aws configure set source_profile aws-fullstack-operator-source --profile aws-fullstack-operator
 aws configure set mfa_serial '<인증 앱 TOTP MFA 장치 ARN>' --profile aws-fullstack-operator
 aws configure set region ap-northeast-2 --profile aws-fullstack-operator
+aws configure set credential_process 'aws configure export-credentials --profile aws-fullstack-operator --format process' --profile aws-fullstack-operator-terraform
+aws configure set region ap-northeast-2 --profile aws-fullstack-operator-terraform
 
-export AWS_PROFILE=aws-fullstack-operator
+aws sts get-caller-identity --profile aws-fullstack-operator
+export AWS_PROFILE=aws-fullstack-operator-terraform
 aws sts get-caller-identity
 terraform -chdir=infra/bootstrap init -reconfigure -input=false \
   -backend-config='bucket=aws-ecs-fullstack-app' \
@@ -197,7 +206,7 @@ terraform -chdir=infra/bootstrap plan -detailed-exitcode -input=false \
   -var-file=terraform.tfvars
 ```
 
-`get-caller-identity`의 ARN은 `assumed-role/aws-fullstack-lab-bootstrap-operator/`로 시작해야 하고, 변경 없는 plan은 종료 코드 0이어야 한다. 현재 역할은 프로젝트 bootstrap 관리용이다. 서비스 기반 적용은 계속 보호된 GitHub workflow에서 실행한다. 장기 액세스 키를 발급하거나 `aws configure export-credentials`의 출력을 로그·문서에 붙여 넣지 않는다. 로컬 프로필은 개인 기기의 `~/.aws/config`에만 저장한다. 이 단계가 성공하면 일상 작업에서 root 세션을 로그아웃한다. 운영 역할이나 MFA가 고장 난 경우에만 계정 root의 복구 절차를 사용하고 원인을 기록한다.
+첫 `aws sts get-caller-identity --profile aws-fullstack-operator`에서 TOTP 코드를 입력하면 AWS CLI가 역할 세션을 캐시한다. Terraform은 `mfa_serial` 프로필에서 MFA 코드를 입력받지 못해 `AssumeRoleTokenProvider session option not set` 오류를 내므로, 캐시된 세션을 `credential_process`로 넘기는 `aws-fullstack-operator-terraform` 프로필을 사용한다. 세션은 최대 1시간이며 만료되면 첫 명령부터 다시 실행한다. 두 `get-caller-identity`의 ARN은 `assumed-role/aws-fullstack-lab-bootstrap-operator/`로 시작해야 하고, 변경 없는 plan은 종료 코드 0이어야 한다. 현재 역할은 프로젝트 bootstrap 관리용이다. 운영 역할 자신과 운영 사용자, Budget을 바꾸는 bootstrap 변경은 이 역할의 권한 밖이므로 root 세션으로 적용하고 이 문서에 기록한다. 서비스 기반 적용은 계속 보호된 GitHub workflow에서 실행한다. 장기 액세스 키를 발급하거나 `aws configure export-credentials`의 출력을 로그·문서에 붙여 넣지 않는다. 로컬 프로필은 개인 기기의 `~/.aws/config`에만 저장한다. 이 단계가 성공하면 일상 작업에서 root 세션을 로그아웃한다. 운영 역할이나 MFA가 고장 난 경우에만 계정 root의 복구 절차를 사용하고 원인을 기록한다.
 
 AWS IAM Identity Center의 독립 계정용 account instance는 AWS 계정 접근용 permission set을 지원하지 않아 이 단일 계정의 사람 로그인 경로로 사용하지 않는다. [AWS Identity Center 인스턴스 비교](https://docs.aws.amazon.com/singlesignon/latest/userguide/identity-center-instances.html), [AWS CLI 역할·MFA 설정](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-role.html), [AWS CLI 임시 로그인](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sign-in.html)을 참고한다.
 
