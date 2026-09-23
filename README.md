@@ -37,6 +37,7 @@ pnpm dev
 - [화면 및 사용 경험](docs/design.md)
 - [아키텍처와 기술 선택](docs/architecture.md)
 - [초기 설정, 배포, 비용 및 장애 대응](docs/operations.md)
+- [PR별 Task 기록과 재구성 이력](docs/tasks/README.md)
 
 ## 비용과 현재 상태
 

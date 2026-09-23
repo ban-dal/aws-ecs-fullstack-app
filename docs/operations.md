@@ -51,6 +51,8 @@ terraform -chdir=infra/bootstrap output
 
 ### 2026-09-23 실행 기록
 
+이 작업의 목표, 선택 이유와 재구성 체크리스트는 [Task 001](tasks/001-terraform-foundation.md)에 기록했다.
+
 - 계정 `065768154598`, 리전 `ap-northeast-2`에 S3 state 버킷 `aws-ecs-fullstack-app`, GitHub OIDC provider와 plan 역할, 월 $5 비용 Budget을 생성했다. Terraform 결과는 9개 생성, 변경·삭제 0개였다.
 - 로컬 state를 `s3://aws-ecs-fullstack-app/bootstrap/terraform.tfstate`로 이전했다. 객체 버전 ID가 생성되고 버킷 버전 관리·공개 접근 차단이 활성화된 것을 확인했다. 이전 후 `terraform plan -detailed-exitcode`는 변경 없음(종료 코드 0)이었다.
 - 당시 AWS 인증 주체는 계정 root였다. 후속 운영에는 권한을 제한한 IAM 주체를 사용한다. GitHub 환경 보호 규칙과 저장소 변수는 2단계에서 설정해야 한다.

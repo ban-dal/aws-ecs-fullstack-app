@@ -22,3 +22,5 @@
 ## AI 작업 기록
 
 큰 변경은 목적, 선택한 대안, 구현, 검증, 비용과 남은 제약을 PR에 남긴다. 새로운 서비스나 제품 가정을 도입할 때는 `docs/`에 결정과 근거를 기록한다. AI가 작성한 계획과 코드는 사람의 PR 리뷰를 거쳐야 한다.
+
+PR 하나를 Task 하나로 다루고 `docs/tasks/NNN-주제.md`에 목표·실제 작업·검증·재구성 절차·다음 Task를 기록한다. PR 본문에서 해당 문서를 연결한다. PR merge를 Task 완료 시점으로 삼고, merge 확인 후 다음 Task 브랜치의 첫 변경에서 이전 Task의 완료일·merge commit을 채운 뒤 다음 순번 문서를 `docs/tasks/_template.md`에서 생성한다. `docs/tasks/README.md` 목록도 함께 갱신한다.
