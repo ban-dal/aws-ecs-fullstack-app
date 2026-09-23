@@ -6,6 +6,21 @@ Terraform bootstrap과 PR plan 코드가 준비되었다. 현재 AWS에는 적�
 
 로컬 검증에는 Terraform 1.14+가 필요하다. AWS 적용에는 S3·IAM·Budgets 변경 권한이 있는 AWS 자격 증명과 전역에서 유일한 버킷 이름이 필요하다. AWS 계정의 Free plan 기간과 크레딧을 Billing에서 확인한다. 도메인·Route 53은 이번 작업에 필요하지 않다.
 
+### 로컬 CLI 인증
+
+Terraform과 AWS CLI v2를 설치한 뒤 프로젝트 전용 프로필의 리전을 설정한다. IAM 사용자 또는 콘솔 로그인 계정은 `aws login`으로 임시 자격 증명을 받는다. IAM Identity Center 사용자라면 `aws configure sso`와 `aws sso login`을 사용한다. 액세스 키와 비밀 키는 저장소나 대화에 기록하지 않는다.
+
+```bash
+terraform version
+aws --version
+aws configure set region ap-northeast-2 --profile aws-fullstack-bootstrap
+aws login --profile aws-fullstack-bootstrap
+aws sts get-caller-identity --profile aws-fullstack-bootstrap
+export AWS_PROFILE=aws-fullstack-bootstrap
+```
+
+SSO를 쓰는 계정에서는 `aws login` 대신 `aws configure sso --profile aws-fullstack-bootstrap`과 `aws sso login --profile aws-fullstack-bootstrap`을 실행한다. `AWS_PROFILE` 환경 변수를 설정한 셸에서 아래 Terraform 명령을 실행해야 AWS provider와 S3 backend가 같은 프로필을 사용한다. 콘솔 로그인에 필요한 IAM 권한과 설정은 [AWS CLI 로그인 안내](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sign-in.html)를 따른다.
+
 ## 1. Bootstrap
 
 `infra/bootstrap/terraform.tfvars.example`을 `infra/bootstrap/terraform.tfvars`로 복사한다. 버킷 이름과 알림 이메일을 입력한다. 이 저장소의 GitHub OIDC 기본 subject는 `repo:ban-dal@46153202/aws-ecs-fullstack-app@1382568125`로 확인했다. 저장소가 이전·재생성되면 GitHub 설정을 다시 확인한다. 이메일이 `null`이면 Budget이 생성되지 않는다. 비용 Budget은 크레딧을 제외한 사용 비용을 기준으로 월간 80% 실제 사용과 100% 예상 사용을 알린다.
