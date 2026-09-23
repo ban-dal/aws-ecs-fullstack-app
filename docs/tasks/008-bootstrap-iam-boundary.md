@@ -2,7 +2,7 @@
 
 | 항목 | 값 |
 | --- | --- |
-| PR | 생성 후 링크 입력 |
+| PR | [#8 · bootstrap IAM 권한 경계](https://github.com/ban-dal/aws-ecs-fullstack-app/pull/8) |
 | 작업 브랜치 | `feat/bootstrap-iam-boundary` |
 | 상태 | 진행 중 |
 | 시작일 | 2026-09-24 |
