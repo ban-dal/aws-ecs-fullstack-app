@@ -1,0 +1,17 @@
+node_modules/
+.pnpm-store/
+.next/
+*.tsbuildinfo
+.turbo/
+out/
+dist/
+.env*
+!.env.example
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.zip
+.terraform/
+*.tfvars
+!*.tfvars.example
+.DS_Store
