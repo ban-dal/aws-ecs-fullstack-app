@@ -10,12 +10,23 @@ terraform {
 }
 
 provider "aws" {
-  region = var.aws_region
+  region              = var.aws_region
+  allowed_account_ids = [var.expected_account_id]
 }
 
 variable "aws_region" {
   type    = string
   default = "ap-northeast-2"
+}
+
+variable "expected_account_id" {
+  type        = string
+  description = "bootstrap을 적용할 AWS 계정 ID. 다른 계정 자격 증명이면 API 호출 전에 실패한다."
+
+  validation {
+    condition     = can(regex("^[0-9]{12}$", var.expected_account_id))
+    error_message = "expected_account_id는 12자리 AWS 계정 ID여야 합니다."
+  }
 }
 
 variable "state_bucket_name" {

@@ -1,6 +1,6 @@
 # 인프라 구성
 
-- `bootstrap`: S3 state 버킷, GitHub OIDC plan 역할, 선택형 월간 비용 Budget. AWS 적용은 별도 운영 단계다.
+- `bootstrap`: S3 state 버킷, GitHub OIDC 환경별 plan·apply 역할과 공통 permissions boundary, 선택형 월간 비용 Budget. AWS 적용은 별도 운영 단계다.
 - `plan`: AWS 계정 식별과 환경별 원격 state를 유지하는 루트 구성. `live` 모듈을 호출해 서비스 기반을 plan한다.
 - `live`: VPC·서브넷·라우팅·보안 그룹·비공개 ECR 모듈. `preprod`는 AWS에 적용했고 `prod`는 아직 적용하지 않았다.
 

@@ -1,3 +1,14 @@
+locals {
+  # Role names are fixed so the Deny statements also cover a deleted and
+  # recreated role.
+  github_role_arns = [
+    for name in concat(
+      [for environment in local.environments : "aws-fullstack-lab-${environment}-plan"],
+      [for environment in local.environments : "aws-fullstack-lab-${environment}-apply"],
+    ) : "arn:aws:iam::${local.account_id}:role/${name}"
+  ]
+}
+
 resource "aws_iam_user" "operator" {
   name = "aws-fullstack-lab-operator"
 
@@ -113,12 +124,40 @@ data "aws_iam_policy_document" "operator_permissions" {
   }
 
   statement {
-    sid     = "ManageProjectBootstrapIdentity"
-    actions = ["iam:*"]
-    resources = concat(
-      [aws_iam_openid_connect_provider.github.arn, aws_iam_role.plan.arn],
-      [for role in aws_iam_role.foundation_apply : role.arn],
-    )
+    sid       = "ManageProjectBootstrapIdentity"
+    actions   = ["iam:*"]
+    resources = concat([aws_iam_openid_connect_provider.github.arn], local.github_role_arns)
+  }
+
+  statement {
+    sid = "ReadGitHubBoundary"
+    actions = [
+      "iam:GetPolicy",
+      "iam:GetPolicyVersion",
+      "iam:ListPolicyTags",
+      "iam:ListPolicyVersions",
+    ]
+    resources = [local.github_boundary_arn]
+  }
+
+  statement {
+    sid       = "KeepGitHubRoleBoundary"
+    effect    = "Deny"
+    actions   = ["iam:DeleteRolePermissionsBoundary"]
+    resources = local.github_role_arns
+  }
+
+  statement {
+    sid       = "RequireGitHubRoleBoundary"
+    effect    = "Deny"
+    actions   = ["iam:CreateRole", "iam:PutRolePermissionsBoundary"]
+    resources = local.github_role_arns
+
+    condition {
+      test     = "StringNotEquals"
+      variable = "iam:PermissionsBoundary"
+      values   = [local.github_boundary_arn]
+    }
   }
 
   statement {
