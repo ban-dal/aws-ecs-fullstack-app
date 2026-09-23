@@ -10,7 +10,7 @@
 - AWS 리소스나 비용을 늘리는 변경은 예상 비용, 종료 방법, 무료 플랜 영향, PR plan 결과를 설명한다. `enable_public_app`의 기본값은 `false`로 유지한다.
 - Terraform state, `.tfvars`, 계정 비밀, AWS 자격 증명은 커밋하지 않는다. GitHub Actions는 OIDC를 사용한다.
 - Terraform을 구현할 때 `preprod`와 `prod`는 서로 다른 S3 state key와 리소스 이름을 유지한다. 한 환경 변경이 다른 환경에 영향을 주는지 검토한다.
-- 향후 `terraform apply`는 PR 리뷰와 merge 이후 GitHub 환경 보호 규칙을 통과해 실행한다. 로컬 긴급 변경은 `docs/operations.md`에 기록하고 코드에 반영한다.
+- 서비스 리소스의 `terraform apply`는 PR 리뷰와 merge 이후 GitHub 환경 보호 규칙을 통과해 실행한다. 최초 OIDC 적용 역할을 생성하는 bootstrap 단계는 기존 관리자 자격 증명을 사용하는 일회성 예외로 분리하고, 사전 plan·사용자 승인·실행 결과를 `docs/operations.md`에 기록한다. 그 외 로컬 긴급 변경도 운영 문서에 기록하고 코드에 반영한다.
 
 ## 테스트 및 검증
 
