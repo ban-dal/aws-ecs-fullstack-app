@@ -4,9 +4,9 @@
 | --- | --- |
 | PR | [#1 · Terraform state·OIDC 기반과 PR 검증 구성](https://github.com/ban-dal/aws-ecs-fullstack-app/pull/1) |
 | 작업 브랜치 | `feat/terraform-foundation` |
-| 상태 | 진행 중: PR 열림 (2026-09-23 확인) |
+| 상태 | 완료: PR merge |
 | 시작일 | 2026-09-23 |
-| 완료일·merge commit | PR merge 후 기록 |
+| 완료일·merge commit | 2026-09-23 · [`d75eb8a`](https://github.com/ban-dal/aws-ecs-fullstack-app/commit/d75eb8ae78305d036c2c81cfb5b5337dafe76416) |
 
 ## 목표와 완료 기준
 
@@ -41,8 +41,8 @@ GitHub OIDC 신뢰 정책에는 확인된 저장소 소유자·저장소의 immu
 - 로컬 Terraform fmt·validate 통과. AWS bootstrap plan은 9개 생성만 포함했고 적용 후 원격 state 기반 plan은 변경 없음이었다.
 - PR #1의 앱 CI와 Terraform validate CI는 통과했다. AWS plan 작업은 GitHub 환경·저장소 변수가 아직 없어 건너뛰었다.
 - S3 저장량과 요청은 사용량에 따라 비용 또는 Free plan 크레딧을 사용할 수 있다. 알림 전용 Budget은 무료지만 지출을 중단하지 않는다. 버킷과 state를 종료하려면 state를 먼저 백업하고 의존하는 환경의 state 사용을 중지한 뒤 [운영 가이드의 복구 절차](../operations.md#롤백과-복구)에 따라 정리한다.
-- 향후 운영은 root 대신 권한을 제한한 IAM 주체로 전환한다. 현재 PR이 merge되기 전이므로 Task 완료 기록은 아직 없다.
+- 향후 운영은 root 대신 권한을 제한한 IAM 주체로 전환한다. PR #1은 2026-09-23에 merge됐다.
 
 ## 남은 사항과 다음 Task
 
-다음 Task 후보는 **GitHub PR plan 환경 구성**이다. `preprod-plan`·`prod-plan` 환경 보호 규칙을 확인하고, bootstrap output에 맞는 `TF_STATE_BUCKET`, `AWS_PLAN_ROLE_ARN`, `AWS_ACCOUNT_ID`, `AWS_REGION` 저장소 변수를 설정한다. 이후 같은 저장소 PR에서 두 환경의 plan이 실행되는지 검증한다. PR #1 merge가 확인되면 Task 002 문서를 만들고 이 Task의 완료일·merge commit을 기록한다.
+다음 작업은 [Task 002 · GitHub PR plan 환경 구성](002-github-pr-plan-setup.md)이다. `preprod-plan`·`prod-plan` 환경 보호 규칙과 bootstrap output에 맞는 저장소 변수를 설정하고, 같은 저장소 PR에서 두 환경의 plan을 검증한다.
