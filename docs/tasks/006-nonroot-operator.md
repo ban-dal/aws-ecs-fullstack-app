@@ -4,9 +4,9 @@
 | --- | --- |
 | PR | [#6 · 비루트 bootstrap 운영 주체 준비](https://github.com/ban-dal/aws-ecs-fullstack-app/pull/6) |
 | 작업 브랜치 | `feat/nonroot-operator` |
-| 상태 | 진행 중: 코드·운영 절차 작성, AWS 미적용 |
+| 상태 | PR merge·IAM 적용 완료, CLI 역할 수임 검증 진행 중 |
 | 시작일 | 2026-09-23 |
-| 완료일·merge commit | PR merge 후 기록 |
+| 완료일·merge commit | 2026-09-24 KST · `ffffc4b7dd90d10922c6d2d051f95c956d1816e7` |
 
 ## 목표와 완료 기준
 
@@ -32,10 +32,11 @@ Task 001과 005의 초기 bootstrap은 계정 root 임시 세션으로 실행했
 ## 검증과 운영 영향
 
 - `terraform fmt -check -recursive infra`, `terraform -chdir=infra/bootstrap validate`, `git diff --check`가 통과했다. 계정 `065768154598`의 기존 S3 원격 state를 읽은 bootstrap plan은 **5개 생성, 변경 0개, 삭제 0개**였다. 새 IAM 사용자·역할·사용자 정책·사용자 관리형 정책 연결·역할 정책만 생성 대상으로 확인했다. 저장 plan은 임시 디렉터리에서 즉시 삭제했다.
-- AWS 실제 적용과 비루트 로그인·역할 수임 검증은 아직 하지 않았다. PR merge 전에는 적용하지 않는다.
+- PR merge 후 같은 commit의 원격 bootstrap 저장 plan을 재확인했다. IAM 5개 생성·기존 변경 0개·삭제 0개였고, 사용자 승인 후 그대로 적용했다. 사후 `terraform plan -detailed-exitcode`는 종료 코드 0으로 변경 없음이었다. 저장 plan은 삭제했다.
+- root MFA 활성화와 IAM 사용자의 콘솔 로그인·패스키 등록, `aws login` 호출 주체가 IAM 사용자임을 확인했다. 패스키는 AWS CLI/API의 MFA 보호 작업을 지원하지 않아 역할 수임이 거절됐다. 자기 MFA 관리 권한도 누락되어 인증 앱(TOTP) 장치 추가가 막혔다. Task 007에서 정책을 보완한 뒤 검증한다.
 - IAM 사용자·역할·정책 자체에는 별도 시간당 요금이 없다. S3 state의 버전·요청은 기존과 같이 사용량에 따른 비용 또는 크레딧 사용 가능성이 있다. Organizations를 만들거나 Free plan을 유료 플랜으로 전환하지 않는다.
 - 종료 시 비루트 로그인을 다른 운영 경로로 대체한 뒤 사용자 콘솔 접근을 끄고 Terraform에서 해당 사용자·역할·정책을 제거한다. state 버킷과 GitHub OIDC 역할은 유지한다.
 
 ## 남은 사항과 다음 Task
 
-비루트 전환이 검증되기 전까지 root를 대체 완료로 기록하지 않는다. 전환 후에는 실험용 `prod` 기반 적용 여부와 ECS/EC2·ALB·HTTPS의 비용 및 중지 절차를 별도 Task로 결정한다.
+비루트 CLI 역할 수임과 그 역할의 변경 없는 bootstrap plan이 검증되기 전까지 root를 대체 완료로 기록하지 않는다. Task 007에서 MFA 자기 관리 권한을 보완한다. 그다음 PR에서 Terraform 영향 댓글을 구현하고, 이후 실험용 `prod` 기반 적용 여부와 ECS/EC2·ALB·HTTPS의 비용 및 중지 절차를 결정한다.

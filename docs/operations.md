@@ -164,12 +164,16 @@ bootstrap 적용 후 `foundation_apply_role_arns`의 `preprod`·`prod` 값을 �
 
 1. 계정 root에 MFA가 활성화됐는지 확인한다. 이는 계정 소유자가 자신의 기기로 직접 등록하며 MFA 코드와 복구 자료를 저장소나 대화에 올리지 않는다. [AWS root MFA 안내](https://docs.aws.amazon.com/IAM/latest/UserGuide/root-user-best-practices.html)를 따른다.
 2. PR merge 뒤 `main`에서 기존 관리자 프로필로 계정과 원격 bootstrap state를 확인한다. `terraform -chdir=infra/bootstrap plan -out=<임시 경로>`의 **IAM 사용자 1개, 역할 1개, 사용자 정책 1개, 사용자 관리형 정책 연결 1개, 역할 정책 1개 생성·기존 리소스 변경/삭제 0개**를 확인한 뒤 저장 plan을 적용한다. 사용자 콘솔 비밀번호·MFA 장치와 장기 액세스 키는 Terraform에서 만들지 않는다. 저장 plan은 임시 디렉터리에 두고 적용 후 삭제한다.
-3. IAM 콘솔에서 새 사용자의 콘솔 접근을 활성화한다. 초기 비밀번호는 사용자만 안전하게 받아 변경하고, 자신의 MFA 장치를 이름 `aws-fullstack-lab-operator`로 등록한다. 콘솔에 사용자로 로그인해 `aws-fullstack-lab-bootstrap-operator` 역할로 전환되는지 확인한다. [IAM 사용자 MFA 등록 안내](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_mfa_enable_virtual.html)를 참고한다.
+3. IAM 콘솔에서 새 사용자의 콘솔 접근을 활성화한다. 초기 비밀번호는 사용자만 안전하게 받아 변경한다. 콘솔용 패스키를 사용할 수 있으나 CLI/API의 MFA 보호 작업에는 인증 앱 방식(TOTP) MFA가 필요하다. 해당 사용자에게 이름 `aws-fullstack-lab-operator`의 TOTP 장치도 등록하고 콘솔에서 `aws-fullstack-lab-bootstrap-operator` 역할 전환을 확인한다. [IAM 사용자 MFA 등록 안내](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_mfa_enable_virtual.html)와 [패스키 지원 범위](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_mfa_fido_supported_configurations.html)를 참고한다.
 4. 비루트 CLI 프로필을 구성하고 호출 주체와 변경 없는 bootstrap plan을 확인한다. 마지막 검증 전에는 root 경로를 제거하지 않는다.
+
+#### 2026-09-24 실제 적용 기록
+
+PR #6 merge commit `ffffc4b7dd90d10922c6d2d051f95c956d1816e7`의 `main`에서 root MFA와 계정·S3 원격 state를 확인했다. 저장 plan은 IAM 사용자·역할·정책 등 5개 생성, 기존 변경·삭제 0개였고 사용자 승인 후 그대로 적용했다. 사후 bootstrap plan은 변경 없음(종료 코드 0)이었으며 저장 plan은 삭제했다. IAM 사용자의 콘솔 로그인과 패스키 MFA, `aws login`의 IAM 사용자 호출 주체를 확인했다. 패스키만으로는 CLI 역할 수임이 거절됐고 자기 MFA 관리 권한도 부족해 TOTP 추가가 막혔다. Task 007에서 정책을 보완한 뒤 비루트 검증을 마친다.
 
 ### 비루트 CLI 프로필
 
-AWS CLI v2.32.0 이상에서 IAM 사용자로 로그인한다. 브라우저에 root 세션이 남아 있으면 `aws login`이 그 세션을 선택할 수 있으므로 첫 `get-caller-identity` 결과의 ARN이 반드시 `user/aws-fullstack-lab-operator`인지 확인한다. 다르면 로그아웃한 뒤 IAM 사용자로 다시 로그인한다. MFA 장치 ARN은 해당 사용자 IAM 보안 자격 증명 화면에서 확인한다.
+AWS CLI v2.32.0 이상에서 IAM 사용자로 로그인한다. 브라우저에 root 세션이 남아 있으면 `aws login`이 그 세션을 선택할 수 있으므로 첫 `get-caller-identity` 결과의 ARN이 반드시 `user/aws-fullstack-lab-operator`인지 확인한다. 다르면 로그아웃한 뒤 IAM 사용자로 다시 로그인한다. CLI의 `mfa_serial`에는 패스키 ARN이 아닌 인증 앱(TOTP) MFA ARN을 쓴다. ARN은 해당 사용자 IAM 보안 자격 증명 화면에서 확인한다.
 
 ```bash
 aws configure set region ap-northeast-2 --profile aws-fullstack-operator-login
@@ -180,7 +184,7 @@ aws configure set credential_process 'aws configure export-credentials --profile
 aws configure set region ap-northeast-2 --profile aws-fullstack-operator-source
 aws configure set role_arn arn:aws:iam::065768154598:role/aws-fullstack-lab-bootstrap-operator --profile aws-fullstack-operator
 aws configure set source_profile aws-fullstack-operator-source --profile aws-fullstack-operator
-aws configure set mfa_serial '<사용자 MFA 장치 ARN>' --profile aws-fullstack-operator
+aws configure set mfa_serial '<인증 앱 TOTP MFA 장치 ARN>' --profile aws-fullstack-operator
 aws configure set region ap-northeast-2 --profile aws-fullstack-operator
 
 export AWS_PROFILE=aws-fullstack-operator
