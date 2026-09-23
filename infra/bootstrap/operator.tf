@@ -126,6 +126,7 @@ data "aws_iam_policy_document" "operator_permissions" {
     actions = [
       "iam:GetRole",
       "iam:GetRolePolicy",
+      "iam:ListAttachedRolePolicies",
       "iam:ListRolePolicies",
     ]
     resources = [aws_iam_role.operator.arn]
@@ -144,7 +145,7 @@ data "aws_iam_policy_document" "operator_permissions" {
 
   statement {
     sid       = "ReadProjectBudget"
-    actions   = ["budgets:ViewBudget"]
+    actions   = ["budgets:ListTagsForResource", "budgets:ViewBudget"]
     resources = ["arn:aws:budgets::${data.aws_caller_identity.current.account_id}:budget/aws-fullstack-lab-monthly"]
   }
 

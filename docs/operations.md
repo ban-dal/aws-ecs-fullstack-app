@@ -158,7 +158,7 @@ bootstrap 적용 후 `foundation_apply_role_arns`의 `preprod`·`prod` 값을 �
 
 [Task 006](tasks/006-nonroot-operator.md)은 사람의 콘솔·로컬 CLI 운영을 계정 root에서 옮긴다. 이 프로젝트는 학습용 `preprod`·`prod`를 한 계정에서 논리적으로 분리한다. AWS Organizations를 만들거나 계정을 가입시키지 않는다. 현재 Free plan 계정이 Organizations에 가입하면 크레딧이 즉시 만료되고 유료 플랜으로 전환될 수 있으므로 [AWS Free Tier FAQ](https://aws.amazon.com/free/free-tier-faqs/)를 확인한다.
 
-`aws-fullstack-lab-operator` IAM 사용자는 콘솔 로그인과 `aws login`용 관리형 정책, 운영 역할 수임, 자신의 비밀번호·MFA 등록 권한만 가진다. `aws-fullstack-lab-bootstrap-operator` 역할은 해당 사용자와 MFA가 확인된 세션만 신뢰한다. 역할은 이 프로젝트의 state 버킷, GitHub OIDC 제공자와 기존 GitHub 역할을 관리하고, 자기 역할·사용자·Budget 설정은 읽는다. 자기 역할 정책과 Budget 변경 권한은 없다. GitHub Actions의 plan·apply OIDC 경로는 그대로 유지한다.
+`aws-fullstack-lab-operator` IAM 사용자는 콘솔 로그인과 `aws login`용 관리형 정책, 운영 역할 수임, 자신의 비밀번호·MFA 등록 권한만 가진다. `aws-fullstack-lab-bootstrap-operator` 역할은 해당 사용자와 MFA가 확인된 세션만 신뢰한다. 역할은 이 프로젝트의 state 버킷, GitHub OIDC 제공자와 기존 GitHub 역할을 관리하고, 자기 역할·사용자·Budget 설정은 읽는다. 자기 역할 정책과 Budget 변경 권한은 없다. 단, GitHub 역할의 정책·신뢰 정책 변경을 거쳐 계정 관리자 수준 권한으로 확대될 수 있으므로 root와 같은 수준으로 MFA와 사용 기록을 관리한다. GitHub Actions의 plan·apply OIDC 경로는 그대로 유지한다.
 
 ### PR merge 후 최초 적용
 

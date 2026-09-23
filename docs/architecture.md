@@ -52,4 +52,4 @@ flowchart LR
 
 bootstrap 구성은 S3 공개 접근 차단, HTTPS 강제, SSE-S3 암호화, 버전 관리를 설정한다. OIDC plan 역할은 이 저장소의 immutable subject와 `preprod-plan`·`prod-plan` 환경 이름만 신뢰한다. state 객체 읽기와 잠금 파일에 필요한 권한만 부여하고 state 객체 쓰기 권한은 주지 않는다. Task 005에서 VPC·ECR 읽기 정책과 환경별 적용 역할을 AWS에 반영했다. 적용 역할은 선택한 환경의 state key와 서울 리전의 기반 네트워크 작업, 환경별 ECR 저장소 작업만 허용한다. EC2 네트워크 API 일부는 생성 전 리소스 ID를 알 수 없어 서울 리전 전체를 대상으로 하므로 두 환경 간 완전한 권한 격리는 아니다. ALB 보안 그룹의 공개 ingress는 닫혀 있다.
 
-Task 006은 콘솔 비밀번호·MFA를 Terraform 밖에서 등록하는 사람의 IAM 사용자와 MFA 필수 bootstrap 운영 역할을 추가한다. 사용자는 운영 역할 수임 외에 직접 리소스 변경 권한을 갖지 않는다. 역할은 프로젝트 state 버킷과 bootstrap OIDC·GitHub 역할 관리에 한정하며 자기 역할 정책을 수정하지 못한다. Budget은 읽기만 가능하다. 이 운영 역할도 프로젝트의 GitHub 적용 역할 정책을 바꿀 수 있는 높은 권한이므로 일상 배포 대신 bootstrap 관리에만 사용한다.
+Task 006은 콘솔 비밀번호·MFA를 Terraform 밖에서 등록하는 사람의 IAM 사용자와 MFA 필수 bootstrap 운영 역할을 추가한다. 사용자는 운영 역할 수임 외에 직접 리소스 변경 권한을 갖지 않는다. 역할은 프로젝트 state 버킷과 bootstrap OIDC·GitHub 역할 관리에 한정하며 자기 역할 정책을 직접 수정하지 못한다. Budget은 읽기만 가능하다. 다만 GitHub 역할의 권한 정책과 신뢰 정책을 모두 바꿀 수 있어, 그 역할을 자신이 수임하도록 고치면 계정 관리자 수준 권한을 얻을 수 있다. 권한 경계를 두기 전까지 이 역할은 MFA로 보호되는 관리자와 같은 권한으로 보고 일상 배포 대신 bootstrap 관리에만 사용한다.
