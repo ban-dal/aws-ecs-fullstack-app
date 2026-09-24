@@ -16,14 +16,23 @@ repo="${GITHUB_REPOSITORY:-ban-dal/aws-ecs-fullstack-app}"
 reviewer="ban-dal"
 failures=0
 
+# 출력은 PR 댓글에 붙여 넣을 수 있도록 계정 ID를 가린다.
+mask() {
+  sed -E 's/[0-9]{12}/<account-id>/g' <<<"$1"
+}
+
 expect() {
   local description="$1" actual="$2" expected="$3"
   if [[ "$actual" == "$expected" ]]; then
     echo "ok   $description"
   else
-    echo "FAIL $description: got '${actual}', want '${expected}'"
+    echo "FAIL $description: got '$(mask "$actual")', want '$(mask "$expected")'"
     failures=$((failures + 1))
   fi
+}
+
+exists() {
+  if gh api "$1" --silent 2>/dev/null; then echo yes; else echo no; fi
 }
 
 # 변수 값을 출력한다. 변수가 없으면 아무것도 출력하지 않는다.
@@ -36,14 +45,21 @@ repo_variable() {
   variable_value "repos/$repo/actions/variables/$1"
 }
 
-for name in TF_STATE_BUCKET AWS_ACCOUNT_ID AWS_REGION; do
-  expect "repository variable $name is set" "$([[ -n "$(repo_variable "$name")" ]] && echo set)" set
+# 계정 ID와 state 버킷 이름은 공개 로그에서 가려지도록 secret으로 둔다. 같은 이름의
+# 변수가 남아 있으면 값이 로그에 드러나므로 없어야 한다.
+for name in AWS_ACCOUNT_ID TF_STATE_BUCKET; do
+  expect "repository secret $name exists" "$(exists "repos/$repo/actions/secrets/$name")" yes
+  expect "repository variable $name is absent" "$(repo_variable "$name")" ""
 done
+expect "repository variable AWS_REGION is set" "$([[ -n "$(repo_variable AWS_REGION)" ]] && echo set)" set
 # plan 역할은 환경별이다. 저장소 수준 값이 있으면 환경 값이 빠졌을 때 조용히
 # 그 자리를 대신한다.
 expect "repository variable AWS_PLAN_ROLE_ARN is absent" "$(repo_variable AWS_PLAN_ROLE_ARN)" ""
 
-account="$(repo_variable AWS_ACCOUNT_ID)"
+# secret 값은 읽을 수 없으므로, 역할 ARN의 계정은 로컬 bootstrap 변수와 비교한다.
+root="$(git rev-parse --show-toplevel)"
+account="$(awk -F'"' '/^expected_account_id[[:space:]]*=/ {print $2}' "$root/infra/bootstrap/terraform.tfvars" 2>/dev/null || true)"
+[[ -n "$account" ]] || { echo "expected_account_id is missing in infra/bootstrap/terraform.tfvars" >&2; exit 1; }
 
 for environment in preprod prod; do
   for kind in plan apply; do

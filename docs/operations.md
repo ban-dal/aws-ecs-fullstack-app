@@ -28,9 +28,9 @@ aws sts get-caller-identity --profile aws-fullstack-operator-login
 
 aws configure set credential_process 'aws configure export-credentials --profile aws-fullstack-operator-login --format process' --profile aws-fullstack-operator-source
 aws configure set region ap-northeast-2 --profile aws-fullstack-operator-source
-aws configure set role_arn arn:aws:iam::065768154598:role/aws-fullstack-lab-bootstrap-operator --profile aws-fullstack-operator
+aws configure set role_arn arn:aws:iam::<account-id>:role/aws-fullstack-lab-bootstrap-operator --profile aws-fullstack-operator
 aws configure set source_profile aws-fullstack-operator-source --profile aws-fullstack-operator
-aws configure set mfa_serial arn:aws:iam::065768154598:mfa/aws-fullstack-lab-operator --profile aws-fullstack-operator
+aws configure set mfa_serial arn:aws:iam::<account-id>:mfa/aws-fullstack-lab-operator --profile aws-fullstack-operator
 aws configure set region ap-northeast-2 --profile aws-fullstack-operator
 aws configure set credential_process 'aws configure export-credentials --profile aws-fullstack-operator --format process' --profile aws-fullstack-operator-terraform
 aws configure set region ap-northeast-2 --profile aws-fullstack-operator-terraform
@@ -75,7 +75,7 @@ PR merge 후:
 
 ## 3. GitHub 설정
 
-`scripts/check-github-settings.sh`가 기대하는 설정의 기준이다. 환경별 보호 규칙, `*-apply`의 `main` 브랜치 제한, 저장소 변수(`TF_STATE_BUCKET`, `AWS_ACCOUNT_ID`, `AWS_REGION`), 환경별 역할 ARN 변수를 확인하고, 어긋난 항목을 `FAIL`로 출력한다. 설정은 바꾸지 않는다. 역할 ARN은 bootstrap output(`plan_role_arns`, `apply_role_arns`)과 같아야 한다.
+`scripts/check-github-settings.sh`가 기대하는 설정의 기준이다. 환경별 보호 규칙, `*-apply`의 `main` 브랜치 제한, 저장소 secret(`AWS_ACCOUNT_ID`, `TF_STATE_BUCKET`)과 저장소 변수(`AWS_REGION`), 환경별 역할 ARN 변수를 확인하고, 어긋난 항목을 `FAIL`로 출력한다. 설정은 바꾸지 않는다. 역할 ARN은 bootstrap output(`plan_role_arns`, `apply_role_arns`)과 같아야 한다. 계정 ID와 버킷 이름을 secret으로 두는 이유는 workflow 주석에 있다.
 
 ```bash
 scripts/check-github-settings.sh

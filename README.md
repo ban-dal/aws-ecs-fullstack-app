@@ -38,8 +38,7 @@ pnpm dev
 ## 다음 단계
 
 1. `prod` 서비스 기반 적용(`Apply service foundation` 실행).
-2. `infra/bootstrap/moved.tf`, `infra/environments/preprod/moved.tf` 삭제. bootstrap과 preprod에 적용한 뒤에는 아무 일도 하지 않으므로 다음 인프라 PR에 함께 넣는다.
-3. 이미지 빌드·push, ECS on EC2, ALB·ACM·Route 53(공개 스위치 `enable_public_app` 기본 `false`), 배포 흐름과 종료 절차, S3·Lambda 예제를 비용 선택지와 함께 추가한다.
+2. 이미지 빌드·push, ECS on EC2, ALB·ACM·Route 53(공개 스위치 `enable_public_app` 기본 `false`), 배포 흐름과 종료 절차, S3·Lambda 예제를 비용 선택지와 함께 추가한다.
 
 ## 문서
 

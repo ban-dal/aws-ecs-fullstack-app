@@ -8,6 +8,8 @@ permissions:
   contents: read
 
 # shell을 지정해야 -eo pipefail로 실행되어 파이프 중간의 실패가 가려지지 않는다.
+# 계정 ID와 state 버킷 이름은 공개 로그에 남지 않도록 secret으로 받는다. secret 값은
+# job 시작부터 로그 전체에서 가려지므로 역할 ARN이나 backend 설정 안에 섞여도 드러나지 않는다.
 defaults:
   run:
     shell: bash
@@ -37,10 +39,7 @@ jobs:
   plan:
     # fork PR은 AWS 자격을 받지 않는다. 같은 저장소의 PR도 브랜치 코드가 plan 역할로
     # 실행되기 전에 *-plan 환경 승인을 기다린다.
-    if: >-
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      vars.TF_STATE_BUCKET != '' &&
-      vars.AWS_ACCOUNT_ID != ''
+    if: github.event.pull_request.head.repo.full_name == github.repository
     needs: validate
     runs-on: ubuntu-latest
     strategy:
@@ -53,10 +52,10 @@ jobs:
       id-token: write
     env:
       AWS_REGION: ${{ vars.AWS_REGION || 'ap-northeast-2' }}
-      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
       TARGET_ENV: ${{ matrix.environment }}
       TF_IN_AUTOMATION: 'true'
-      TF_VAR_expected_account_id: ${{ vars.AWS_ACCOUNT_ID }}
+      TF_VAR_expected_account_id: ${{ secrets.AWS_ACCOUNT_ID }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -65,10 +64,13 @@ jobs:
         with:
           terraform_version: '1.14.0'
           terraform_wrapper: false
-      - name: Check environment plan role
+      - name: Check required configuration
         env:
           AWS_PLAN_ROLE_ARN: ${{ vars.AWS_PLAN_ROLE_ARN }}
-        run: test -n "$AWS_PLAN_ROLE_ARN"
+        run: |
+          test -n "$AWS_PLAN_ROLE_ARN"
+          test -n "$TF_VAR_expected_account_id"
+          test -n "$TF_STATE_BUCKET"
       - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           role-to-assume: ${{ vars.AWS_PLAN_ROLE_ARN }}
@@ -134,8 +136,20 @@ jobs:
             echo "## Terraform plan"
             echo "commit \`${HEAD_SHA:0:7}\` · [실행 기록]($RUN_URL)"
             echo
-            echo "**바뀐 인프라 파일**"
-            if [ -n "$files" ]; then sed 's/.*/- `&`/' <<<"$files"; else echo "- 없음"; fi
+            # 파일이 많으면 plan 요약이 아래로 밀리지 않도록 목록을 접는다.
+            count="$(grep -c . <<<"$files" || true)"
+            if [ "$count" -eq 0 ]; then
+              echo "**바뀐 인프라 파일**: 없음"
+            elif [ "$count" -le 10 ]; then
+              echo "**바뀐 인프라 파일**"
+              sed 's/.*/- `&`/' <<<"$files"
+            else
+              echo "<details><summary><b>바뀐 인프라 파일 ${count}개</b></summary>"
+              echo
+              sed 's/.*/- `&`/' <<<"$files"
+              echo
+              echo "</details>"
+            fi
             if grep -q '^infra/bootstrap/' <<<"$files"; then
               echo
               echo "> bootstrap 변경은 아래 plan에 나오지 않는다. PR 본문의 \`scripts/bootstrap.sh plan\` 결과를 확인한다."
