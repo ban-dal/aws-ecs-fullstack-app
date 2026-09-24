@@ -96,6 +96,15 @@ module "budgets" {
   limit_usd   = var.monthly_budget_usd
 }
 
+# prod ALB의 ACM 인증서만 이 영역을 쓴다. preprod는 VPN 안에서 HTTP로 접속하므로
+# 인증서가 필요 없다.
+module "route53_zone" {
+  source = "../modules/route53-zone"
+
+  name        = "aws.bandal.dev"
+  caa_issuers = ["amazon.com"]
+}
+
 module "ecr_registry" {
   source = "../modules/ecr-registry"
 

@@ -8,8 +8,9 @@
 | --- | --- | --- |
 | 서비스 기반 (`infra/environments/<환경>`: VPC·보안 그룹·ECR 저장소) | GitHub 환경별 apply 역할 | [4절](#4-서비스-기반-적용)의 `Apply service foundation` |
 | bootstrap 중 state 버킷, OIDC 제공자, GitHub 역할의 정책·신뢰 정책 | 운영 역할 `aws-fullstack-lab-bootstrap-operator` | [2절](#2-bootstrap-변경-적용)의 `scripts/bootstrap.sh` |
-| bootstrap 중 운영 사용자·역할, Budget, GitHub 역할 boundary 정책, ECR 레지스트리 스캔 설정 | 계정 root 세션 | [2절](#2-bootstrap-변경-적용)의 `scripts/bootstrap.sh` |
+| bootstrap 중 운영 사용자·역할, Budget, GitHub 역할 boundary 정책, ECR 레지스트리 스캔 설정, 서비스 DNS 영역 | 계정 root 세션 | [2절](#2-bootstrap-변경-적용)의 `scripts/bootstrap.sh` |
 | 콘솔 비밀번호, MFA 장치 | 사용자 본인 | IAM 콘솔 |
+| `bandal.dev`의 `aws` NS 위임 레코드 | 사용자 본인 | Vercel 대시보드([4절의 도메인 위임](#도메인-위임)) |
 
 PR CI는 apply하지 않는다. merge만으로 배포가 시작되지 않는다.
 
@@ -96,6 +97,29 @@ PR에서는 두 환경의 plan 요약과 바뀐 인프라 파일이 PR 댓글 �
 
 기본 AZ는 `ap-northeast-2a`, `ap-northeast-2c`다. 계정에서 쓸 수 없으면 두 환경의 `availability_zones`를 같은 순서로 지정한다. 적용 후 AZ 순서를 바꾸면 서브넷이 교체된다.
 
+### 도메인 위임
+
+`bandal.dev`는 Vercel에서 등록했고 DNS도 Vercel이 관리한다. 서비스 주소에는 하위 도메인 `aws.bandal.dev`만 Route 53 영역(`modules/route53-zone`)으로 위임한다. Vercel의 `*` ALIAS와 CAA 레코드는 바꾸지 않는다. 명시적인 NS 위임이 와일드카드보다 우선하고, CAA는 이 영역에 따로 둔다.
+
+영역을 처음 만들었거나 지우고 다시 만들었을 때만 한다. 다시 만들면 네임서버가 바뀐다.
+
+1. 네임서버 4개를 확인한다.
+
+   ```bash
+   terraform -chdir=infra/bootstrap output -json dns_name_servers
+   ```
+
+2. Vercel 대시보드의 Domains → `bandal.dev` → DNS Records에서 Name `aws`, Type `NS`, Value에 네임서버를 하나씩 넣어 레코드 4개를 추가한다. 이전 네임서버 레코드가 있으면 지운다.
+3. 위임과 CAA를 확인한다. 전파에는 몇 분이 걸릴 수 있다.
+
+   ```bash
+   dig +short NS aws.bandal.dev
+   ```
+
+   ```bash
+   dig +short CAA aws.bandal.dev
+   ```
+
 ## 5. 새 계정 재구성
 
 1. Terraform 1.14+, AWS CLI v2.32+를 준비한다. root MFA를 켜고 [1절](#root-예외)의 root 프로필을 만든다. Free plan 기간과 크레딧을 Billing에서 확인한다.
@@ -122,14 +146,14 @@ PR에서는 두 환경의 plan 요약과 바뀐 인프라 파일이 PR 댓글 �
 
 5. [README의 GitHub 설정](../README.md#github-설정)대로 GitHub 환경, secret, 변수를 bootstrap output 값으로 채우고 [3절](#3-github-설정)의 스크립트로 확인한다.
 6. IAM 콘솔에서 `aws-fullstack-lab-operator`의 콘솔 접근을 켠다. 사용자는 초기 비밀번호를 바꾸고, 필요하면 콘솔용 패스키와 함께 이름이 `aws-fullstack-lab-operator`인 인증 앱 MFA를 등록한다. [1절](#운영-역할-일상)의 프로필로 `scripts/bootstrap.sh plan`이 변경 없음과 테스트 통과를 보이면 root 세션을 로그아웃한다.
-7. [4절](#4-서비스-기반-적용)로 `preprod`부터 적용한다.
+7. [4절의 도메인 위임](#도메인-위임)을 하고, [4절](#4-서비스-기반-적용)로 `preprod`부터 적용한다.
 
 ## 6. 비용 관리
 
 - 새 AWS Free plan은 최대 6개월 또는 크레딧 소진 시 끝난다(2026년 9월 기준). Billing의 Free Tier 85% 알림과 크레딧 잔여량을 확인한다.
 - Budget([`modules/budgets`](../infra/modules/budgets/main.tf))은 이메일로 알리기만 하고 지출을 멈추지 않는다.
 - IAM, VPC, Internet Gateway 자체는 무료다. S3 state 저장·요청과 ECR 이미지 저장·전송은 사용량에 따라 과금된다. state 버킷의 이전 버전은 lifecycle 규칙으로 만료된다.
-- 퍼블릭 IPv4, EC2, ALB, Route 53 호스팅 영역은 과금 대상이다. 추가하는 PR에서 서울 리전 요금으로 비용을 계산하고, 공개 앱은 기본적으로 끈다. NAT Gateway는 쓰지 않는다.
+- Route 53 호스팅 영역은 월 $0.50이다. 퍼블릭 IPv4, EC2, ALB도 과금 대상이다. 추가하는 PR에서 서울 리전 요금으로 비용을 계산하고, 공개 앱은 기본적으로 끈다. NAT Gateway는 쓰지 않는다.
 
 ## 7. 종료·롤백·복구
 

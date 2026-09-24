@@ -195,6 +195,18 @@ data "aws_iam_policy_document" "role" {
     resources = ["*"]
   }
 
+  # bootstrap plan이 서비스 DNS 영역과 레코드를 refresh하기 위한 읽기 권한이다. 영역과
+  # 레코드 변경은 root로 적용한다.
+  statement {
+    sid = "ReadServiceDnsZone"
+    actions = [
+      "route53:GetHostedZone",
+      "route53:ListResourceRecordSets",
+      "route53:ListTagsForResource",
+    ]
+    resources = ["arn:aws:route53:::hostedzone/*"]
+  }
+
   # scripts/bootstrap.sh가 apply 전에 정책 테스트를 실행하기 위한 권한이다.
   # 시뮬레이터는 요청에 넣은 정책을 판정할 뿐 권한을 주지 않는다.
   statement {
