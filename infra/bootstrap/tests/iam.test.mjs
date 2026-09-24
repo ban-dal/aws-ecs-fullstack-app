@@ -3,7 +3,7 @@
 // 변경은 적용되기 전에 여기서 실패한다.
 //
 // scripts/bootstrap.sh plan에서 실행되며, 직접 실행할 수도 있다.
-//   PLAN_JSON=<terraform show -json 출력> node --test infra/bootstrap/policy-tests/*.test.mjs
+//   PLAN_JSON=<terraform show -json 출력> node --test infra/bootstrap/tests/*.test.mjs
 // iam:SimulateCustomPolicy를 호출할 수 있는 AWS 자격 증명이 필요하다.
 
 import assert from "node:assert/strict";
@@ -23,10 +23,10 @@ const region = variable("aws_region");
 const bucket = `arn:aws:s3:::${variable("state_bucket_name")}`;
 const ec2 = `arn:aws:ec2:${region}:${account}`;
 const role = (name) => `arn:aws:iam::${account}:role/${name}`;
-const boundaryArn = `arn:aws:iam::${account}:policy/${after["aws_iam_policy.github_boundary"].name}`;
+const boundaryArn = `arn:aws:iam::${account}:policy/${after["module.iam_github_oidc.aws_iam_policy.boundary"].name}`;
 
-const boundary = after["aws_iam_policy.github_boundary"].policy;
-const operator = after["aws_iam_role_policy.operator"].policy;
+const boundary = after["module.iam_github_oidc.aws_iam_policy.boundary"].policy;
+const operator = after["module.iam_operator.aws_iam_role_policy.this"].policy;
 const admin = JSON.stringify({ Version: "2012-10-17", Statement: [{ Effect: "Allow", Action: "*", Resource: "*" }] });
 const inRegion = { "aws:RequestedRegion": region };
 
@@ -44,8 +44,8 @@ async function decide({ policies, boundaries = [], action, resource, context = {
 }
 
 for (const [environment, other] of [["preprod", "prod"], ["prod", "preprod"]]) {
-  const apply = { policies: [after[`aws_iam_role_policy.foundation_apply["${environment}"]`].policy], boundaries: [boundary] };
-  const planRole = { policies: [after[`aws_iam_role_policy.plan["${environment}"]`].policy], boundaries: [boundary] };
+  const apply = { policies: [after[`module.iam_github_apply.aws_iam_role_policy.this["${environment}"]`].policy], boundaries: [boundary] };
+  const planRole = { policies: [after[`module.iam_github_plan.aws_iam_role_policy.this["${environment}"]`].policy], boundaries: [boundary] };
   const own = { ...inRegion, "aws:ResourceTag/Environment": environment };
   const foreign = { ...inRegion, "aws:ResourceTag/Environment": other };
   const repository = (name) => `arn:aws:ecr:${region}:${account}:repository/aws-fullstack-lab-${name}-web`;

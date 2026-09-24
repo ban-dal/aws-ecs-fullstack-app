@@ -1,7 +1,20 @@
+# bootstrap 루트: 계정 단위 기반과 IAM이다. GitHub OIDC 역할 자체를 만들기 때문에
+# workflow로 적용할 수 없고, PR merge 후 사람이 scripts/bootstrap.sh로 적용한다.
+# 이 파일에는 모듈 호출과 모듈 사이에 넘기는 값만 둔다.
+
 locals {
   environments = toset(["preprod", "prod"])
-  account_id   = data.aws_caller_identity.current.account_id
+  account_id   = var.expected_account_id
 
+  github_boundary_name = "aws-fullstack-lab-github-boundary"
+  # 운영 역할 정책은 boundary 리소스가 아니라 이름으로 만든 ARN을 쓴다. boundary가
+  # 바뀌는 plan에서도 운영 역할 정책 JSON을 읽을 수 있게 하기 위해서다.
+  github_boundary_arn = "arn:aws:iam::${local.account_id}:policy/${local.github_boundary_name}"
+
+  budget_name = "aws-fullstack-lab-monthly"
+
+  # 아래 두 값은 infra/environments가 만드는 리소스와 맞아야 한다. ECR 저장소 이름은
+  # environments의 ecr-repository 이름과 같고, 읽기 액션은 그 리소스를 refresh할 때 쓴다.
   web_repository_arns = {
     for environment in local.environments :
     environment => "arn:aws:ecr:${var.aws_region}:${local.account_id}:repository/aws-fullstack-lab-${environment}-web"
@@ -21,227 +34,70 @@ locals {
   ]
 }
 
-resource "aws_s3_bucket" "state" {
-  bucket        = var.state_bucket_name
-  force_destroy = false
-  tags = {
-    Project = "aws-fullstack-lab"
-    Purpose = "terraform-state"
-  }
+module "s3_terraform_state" {
+  source = "../modules/s3-terraform-state"
+
+  bucket_name = var.state_bucket_name
 }
 
-data "aws_caller_identity" "current" {}
+module "iam_github_oidc" {
+  source = "../modules/iam-github-oidc"
 
-resource "aws_s3_bucket_versioning" "state" {
-  bucket = aws_s3_bucket.state.id
-
-  versioning_configuration {
-    status = "Enabled"
-  }
+  boundary_name    = local.github_boundary_name
+  environments     = local.environments
+  region           = var.aws_region
+  state_bucket_arn = module.s3_terraform_state.arn
 }
 
-resource "aws_s3_bucket_server_side_encryption_configuration" "state" {
-  bucket = aws_s3_bucket.state.id
+module "iam_github_plan" {
+  source = "../modules/iam-github-plan"
 
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
-    }
-  }
+  account_id         = local.account_id
+  environments       = local.environments
+  region             = var.aws_region
+  repository_subject = var.github_repository_subject
+  oidc_provider_arn  = module.iam_github_oidc.oidc_provider_arn
+  boundary_arn       = module.iam_github_oidc.boundary_arn
+  state_bucket_arn   = module.s3_terraform_state.arn
+  read_actions       = local.foundation_read_actions
+  repository_arns    = local.web_repository_arns
 }
 
-resource "aws_s3_bucket_lifecycle_configuration" "state" {
-  bucket = aws_s3_bucket.state.id
+module "iam_github_apply" {
+  source = "../modules/iam-github-apply"
 
-  rule {
-    id     = "expire-old-state-versions"
-    status = "Enabled"
-
-    filter {}
-
-    noncurrent_version_expiration {
-      noncurrent_days           = 90
-      newer_noncurrent_versions = 10
-    }
-
-    abort_incomplete_multipart_upload {
-      days_after_initiation = 7
-    }
-  }
-
-  depends_on = [aws_s3_bucket_versioning.state]
+  account_id         = local.account_id
+  environments       = local.environments
+  region             = var.aws_region
+  repository_subject = var.github_repository_subject
+  oidc_provider_arn  = module.iam_github_oidc.oidc_provider_arn
+  boundary_arn       = module.iam_github_oidc.boundary_arn
+  state_bucket_arn   = module.s3_terraform_state.arn
+  read_actions       = local.foundation_read_actions
+  repository_arns    = local.web_repository_arns
 }
 
-resource "aws_s3_bucket_public_access_block" "state" {
-  bucket                  = aws_s3_bucket.state.id
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
+module "iam_operator" {
+  source = "../modules/iam-operator"
+
+  account_id               = local.account_id
+  state_bucket_arn         = module.s3_terraform_state.arn
+  github_oidc_provider_arn = module.iam_github_oidc.oidc_provider_arn
+  github_role_arns         = concat(values(module.iam_github_plan.role_arns), values(module.iam_github_apply.role_arns))
+  github_boundary_arn      = local.github_boundary_arn
+  budget_name              = local.budget_name
 }
 
-data "aws_iam_policy_document" "state_tls" {
-  statement {
-    sid       = "DenyInsecureTransport"
-    effect    = "Deny"
-    actions   = ["s3:*"]
-    resources = [aws_s3_bucket.state.arn, "${aws_s3_bucket.state.arn}/*"]
+module "budgets" {
+  source = "../modules/budgets"
 
-    principals {
-      type        = "*"
-      identifiers = ["*"]
-    }
-
-    condition {
-      test     = "Bool"
-      variable = "aws:SecureTransport"
-      values   = ["false"]
-    }
-  }
+  name        = local.budget_name
+  alert_email = var.budget_alert_email
+  limit_usd   = var.monthly_budget_usd
 }
 
-resource "aws_s3_bucket_policy" "state_tls" {
-  bucket     = aws_s3_bucket.state.id
-  policy     = data.aws_iam_policy_document.state_tls.json
-  depends_on = [aws_s3_bucket_public_access_block.state]
-}
+module "ecr_registry" {
+  source = "../modules/ecr-registry"
 
-resource "aws_iam_openid_connect_provider" "github" {
-  url            = "https://token.actions.githubusercontent.com"
-  client_id_list = ["sts.amazonaws.com"]
-}
-
-data "aws_iam_policy_document" "plan_assume" {
-  for_each = local.environments
-
-  statement {
-    actions = ["sts:AssumeRoleWithWebIdentity"]
-
-    principals {
-      type        = "Federated"
-      identifiers = [aws_iam_openid_connect_provider.github.arn]
-    }
-
-    condition {
-      test     = "StringEquals"
-      variable = "token.actions.githubusercontent.com:aud"
-      values   = ["sts.amazonaws.com"]
-    }
-
-    condition {
-      test     = "StringEquals"
-      variable = "token.actions.githubusercontent.com:sub"
-      values   = ["${var.github_repository_subject}:environment:${each.key}-plan"]
-    }
-  }
-}
-
-resource "aws_iam_role" "plan" {
-  for_each = local.environments
-
-  name                 = "aws-fullstack-lab-${each.key}-plan"
-  assume_role_policy   = data.aws_iam_policy_document.plan_assume[each.key].json
-  permissions_boundary = local.github_boundary_arn
-  max_session_duration = 3600
-
-  tags = {
-    Project     = "aws-fullstack-lab"
-    Environment = each.key
-    Purpose     = "terraform-plan"
-  }
-
-  depends_on = [aws_iam_policy.github_boundary]
-}
-
-data "aws_iam_policy_document" "plan" {
-  for_each = local.environments
-
-  statement {
-    sid       = "ListStateBucket"
-    actions   = ["s3:ListBucket"]
-    resources = [aws_s3_bucket.state.arn]
-  }
-
-  statement {
-    sid       = "ReadOwnState"
-    actions   = ["s3:GetObject"]
-    resources = ["${aws_s3_bucket.state.arn}/${each.key}/terraform.tfstate"]
-  }
-
-  statement {
-    sid       = "LockOwnState"
-    actions   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
-    resources = ["${aws_s3_bucket.state.arn}/${each.key}/terraform.tfstate.tflock"]
-  }
-
-  statement {
-    sid       = "ReadFoundationNetwork"
-    actions   = local.foundation_read_actions
-    resources = ["*"]
-
-    condition {
-      test     = "StringEquals"
-      variable = "aws:RequestedRegion"
-      values   = [var.aws_region]
-    }
-  }
-
-  statement {
-    sid = "ReadOwnRepository"
-    actions = [
-      "ecr:DescribeRepositories",
-      "ecr:GetLifecyclePolicy",
-      "ecr:ListTagsForResource",
-    ]
-    resources = [local.web_repository_arns[each.key]]
-  }
-}
-
-resource "aws_iam_role_policy" "plan" {
-  for_each = local.environments
-
-  name   = "terraform-plan-read"
-  role   = aws_iam_role.plan[each.key].name
-  policy = data.aws_iam_policy_document.plan[each.key].json
-}
-
-resource "aws_budgets_budget" "monthly" {
-  count        = var.budget_alert_email == null ? 0 : 1
-  name         = "aws-fullstack-lab-monthly"
-  budget_type  = "COST"
-  limit_amount = tostring(var.monthly_budget_usd)
-  limit_unit   = "USD"
-  time_unit    = "MONTHLY"
-
-  cost_types {
-    include_credit = false
-  }
-
-  notification {
-    comparison_operator        = "GREATER_THAN"
-    threshold                  = 80
-    threshold_type             = "PERCENTAGE"
-    notification_type          = "ACTUAL"
-    subscriber_email_addresses = [var.budget_alert_email]
-  }
-
-  notification {
-    comparison_operator        = "GREATER_THAN"
-    threshold                  = 100
-    threshold_type             = "PERCENTAGE"
-    notification_type          = "FORECASTED"
-    subscriber_email_addresses = [var.budget_alert_email]
-  }
-}
-
-output "state_bucket" {
-  value = aws_s3_bucket.state.bucket
-}
-
-output "plan_role_arns" {
-  value = { for environment, role in aws_iam_role.plan : environment => role.arn }
-}
-
-output "aws_account_id" {
-  value = data.aws_caller_identity.current.account_id
+  repository_filter = "aws-fullstack-lab-*"
 }

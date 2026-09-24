@@ -8,17 +8,7 @@
 # 이 역할 정책의 권한 밖인 변경은 계정 root 세션으로 적용한다. 어떤 변경인지는
 # docs/operations.md에 있다.
 
-locals {
-  # 역할 이름을 고정해 두어야 역할을 삭제한 뒤 다시 만들어도 Deny가 적용된다.
-  github_role_arns = [
-    for name in concat(
-      [for environment in local.environments : "aws-fullstack-lab-${environment}-plan"],
-      [for environment in local.environments : "aws-fullstack-lab-${environment}-apply"],
-    ) : "arn:aws:iam::${local.account_id}:role/${name}"
-  ]
-}
-
-resource "aws_iam_user" "operator" {
+resource "aws_iam_user" "this" {
   name = "aws-fullstack-lab-operator"
 
   tags = {
@@ -29,18 +19,18 @@ resource "aws_iam_user" "operator" {
 
 # 콘솔 비밀번호와 MFA 장치는 Terraform 밖에서 등록한다. 비밀번호와 복구 자료가
 # state나 PR에 들어가지 않게 하기 위해서다.
-resource "aws_iam_user_policy_attachment" "operator_login" {
-  user       = aws_iam_user.operator.name
+resource "aws_iam_user_policy_attachment" "sign_in" {
+  user       = aws_iam_user.this.name
   policy_arn = "arn:aws:iam::aws:policy/SignInLocalDevelopmentAccess"
 }
 
-data "aws_iam_policy_document" "operator_assume" {
+data "aws_iam_policy_document" "assume" {
   statement {
     actions = ["sts:AssumeRole"]
 
     principals {
       type        = "AWS"
-      identifiers = [aws_iam_user.operator.arn]
+      identifiers = [aws_iam_user.this.arn]
     }
 
     condition {
@@ -51,9 +41,9 @@ data "aws_iam_policy_document" "operator_assume" {
   }
 }
 
-resource "aws_iam_role" "operator" {
+resource "aws_iam_role" "this" {
   name                 = "aws-fullstack-lab-bootstrap-operator"
-  assume_role_policy   = data.aws_iam_policy_document.operator_assume.json
+  assume_role_policy   = data.aws_iam_policy_document.assume.json
   max_session_duration = 3600
 
   tags = {
@@ -62,11 +52,11 @@ resource "aws_iam_role" "operator" {
   }
 }
 
-data "aws_iam_policy_document" "operator_user" {
+data "aws_iam_policy_document" "user" {
   statement {
     sid       = "AssumeBootstrapOperatorOnly"
     actions   = ["sts:AssumeRole"]
-    resources = [aws_iam_role.operator.arn]
+    resources = [aws_iam_role.this.arn]
   }
 
   statement {
@@ -78,13 +68,13 @@ data "aws_iam_policy_document" "operator_user" {
   statement {
     sid       = "CreateOwnVirtualMfaDevice"
     actions   = ["iam:CreateVirtualMFADevice"]
-    resources = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:mfa/${aws_iam_user.operator.name}"]
+    resources = ["arn:aws:iam::${var.account_id}:mfa/${aws_iam_user.this.name}"]
   }
 
   statement {
     sid       = "DeleteOwnVirtualMfaDeviceWithMfa"
     actions   = ["iam:DeleteVirtualMFADevice"]
-    resources = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:mfa/${aws_iam_user.operator.name}"]
+    resources = ["arn:aws:iam::${var.account_id}:mfa/${aws_iam_user.this.name}"]
 
     condition {
       test     = "Bool"
@@ -96,7 +86,7 @@ data "aws_iam_policy_document" "operator_user" {
   statement {
     sid       = "DeactivateOwnMfaWithMfa"
     actions   = ["iam:DeactivateMFADevice"]
-    resources = [aws_iam_user.operator.arn]
+    resources = [aws_iam_user.this.arn]
 
     condition {
       test     = "Bool"
@@ -115,27 +105,27 @@ data "aws_iam_policy_document" "operator_user" {
       "iam:ListMFADevices",
       "iam:ResyncMFADevice",
     ]
-    resources = [aws_iam_user.operator.arn]
+    resources = [aws_iam_user.this.arn]
   }
 }
 
-resource "aws_iam_user_policy" "operator" {
+resource "aws_iam_user_policy" "this" {
   name   = "assume-bootstrap-operator"
-  user   = aws_iam_user.operator.name
-  policy = data.aws_iam_policy_document.operator_user.json
+  user   = aws_iam_user.this.name
+  policy = data.aws_iam_policy_document.user.json
 }
 
-data "aws_iam_policy_document" "operator_permissions" {
+data "aws_iam_policy_document" "role" {
   statement {
     sid       = "ManageProjectStateBucket"
     actions   = ["s3:*"]
-    resources = [aws_s3_bucket.state.arn, "${aws_s3_bucket.state.arn}/*"]
+    resources = [var.state_bucket_arn, "${var.state_bucket_arn}/*"]
   }
 
   statement {
     sid       = "ManageProjectBootstrapIdentity"
     actions   = ["iam:*"]
-    resources = concat([aws_iam_openid_connect_provider.github.arn], local.github_role_arns)
+    resources = concat([var.github_oidc_provider_arn], var.github_role_arns)
   }
 
   statement {
@@ -146,26 +136,26 @@ data "aws_iam_policy_document" "operator_permissions" {
       "iam:ListPolicyTags",
       "iam:ListPolicyVersions",
     ]
-    resources = [local.github_boundary_arn]
+    resources = [var.github_boundary_arn]
   }
 
   statement {
     sid       = "KeepGitHubRoleBoundary"
     effect    = "Deny"
     actions   = ["iam:DeleteRolePermissionsBoundary"]
-    resources = local.github_role_arns
+    resources = var.github_role_arns
   }
 
   statement {
     sid       = "RequireGitHubRoleBoundary"
     effect    = "Deny"
     actions   = ["iam:CreateRole", "iam:PutRolePermissionsBoundary"]
-    resources = local.github_role_arns
+    resources = var.github_role_arns
 
     condition {
       test     = "StringNotEquals"
       variable = "iam:PermissionsBoundary"
-      values   = [local.github_boundary_arn]
+      values   = [var.github_boundary_arn]
     }
   }
 
@@ -177,7 +167,7 @@ data "aws_iam_policy_document" "operator_permissions" {
       "iam:ListAttachedRolePolicies",
       "iam:ListRolePolicies",
     ]
-    resources = [aws_iam_role.operator.arn]
+    resources = [aws_iam_role.this.arn]
   }
 
   statement {
@@ -188,13 +178,13 @@ data "aws_iam_policy_document" "operator_permissions" {
       "iam:ListAttachedUserPolicies",
       "iam:ListUserPolicies",
     ]
-    resources = [aws_iam_user.operator.arn]
+    resources = [aws_iam_user.this.arn]
   }
 
   statement {
     sid       = "ReadProjectBudget"
     actions   = ["budgets:ListTagsForResource", "budgets:ViewBudget"]
-    resources = ["arn:aws:budgets::${data.aws_caller_identity.current.account_id}:budget/aws-fullstack-lab-monthly"]
+    resources = ["arn:aws:budgets::${var.account_id}:budget/${var.budget_name}"]
   }
 
   # bootstrap plan이 레지스트리 스캔 설정을 refresh하기 위한 읽기 권한이다. 이 API는
@@ -220,16 +210,8 @@ data "aws_iam_policy_document" "operator_permissions" {
   }
 }
 
-resource "aws_iam_role_policy" "operator" {
+resource "aws_iam_role_policy" "this" {
   name   = "terraform-bootstrap-operator"
-  role   = aws_iam_role.operator.name
-  policy = data.aws_iam_policy_document.operator_permissions.json
-}
-
-output "operator_user_arn" {
-  value = aws_iam_user.operator.arn
-}
-
-output "operator_role_arn" {
-  value = aws_iam_role.operator.arn
+  role   = aws_iam_role.this.name
+  policy = data.aws_iam_policy_document.role.json
 }

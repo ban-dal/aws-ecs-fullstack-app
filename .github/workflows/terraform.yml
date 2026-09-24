@@ -23,12 +23,12 @@ jobs:
       - run: terraform fmt -check -recursive infra
       - run: terraform -chdir=infra/bootstrap init -backend=false -input=false
       - run: terraform -chdir=infra/bootstrap validate
-      - run: terraform -chdir=infra/plan init -backend=false -input=false
-      - run: terraform -chdir=infra/plan validate
+      - run: terraform -chdir=infra/environments init -backend=false -input=false
+      - run: terraform -chdir=infra/environments validate
       - name: Check script syntax
         run: |
           for script in scripts/*.sh; do bash -n "$script"; done
-          node --check infra/bootstrap/policy-tests/*.test.mjs
+          node --check infra/bootstrap/tests/*.test.mjs
 
   plan:
     # fork PR은 AWS 자격을 받지 않는다. 같은 저장소의 PR도 브랜치 코드가 plan 역할로
@@ -71,15 +71,15 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
       - name: Initialize environment state
         run: >-
-          terraform -chdir=infra/plan init -input=false
+          terraform -chdir=infra/environments init -input=false
           -backend-config="bucket=$TF_STATE_BUCKET"
           -backend-config="key=$TARGET_ENV/terraform.tfstate"
           -backend-config="region=$AWS_REGION"
       - name: Plan environment
         run: |
-          terraform -chdir=infra/plan plan -input=false -no-color -lock-timeout=5m \
+          terraform -chdir=infra/environments plan -input=false -no-color -lock-timeout=5m \
             -var="environment=$TARGET_ENV" -out="$RUNNER_TEMP/plan.tfplan"
-          terraform -chdir=infra/plan show -json "$RUNNER_TEMP/plan.tfplan" > "$RUNNER_TEMP/plan.json"
+          terraform -chdir=infra/environments show -json "$RUNNER_TEMP/plan.tfplan" > "$RUNNER_TEMP/plan.json"
           summary="$RUNNER_TEMP/summary/$TARGET_ENV.md"
           mkdir -p "$(dirname "$summary")"
           {

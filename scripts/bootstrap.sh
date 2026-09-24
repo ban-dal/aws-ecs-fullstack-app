@@ -36,7 +36,7 @@ plan() {
     || { tail -n 30 "$work/plan.log" >&2; exit 1; }
   "${tf[@]}" show -json "$work/bootstrap.tfplan" > "$work/plan.json"
   "$root/scripts/tfplan.sh" summary "$work/plan.json"
-  PLAN_JSON="$work/plan.json" node --test --test-reporter=dot "$root"/infra/bootstrap/policy-tests/*.test.mjs
+  PLAN_JSON="$work/plan.json" node --test --test-reporter=dot "$root"/infra/bootstrap/tests/*.test.mjs
   echo "saved plan: $work/bootstrap.tfplan (full output: $work/plan.log)"
 }
 

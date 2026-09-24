@@ -1,5 +1,11 @@
+# 환경별 서비스 기반 적용 역할이다. main 브랜치의 *-apply GitHub 환경만 신뢰한다.
+# 자기 state key, 자기 ECR 저장소, Environment 태그가 같은 EC2 네트워크 리소스만
+# 만들고 바꾸고 지울 수 있다.
+
 locals {
-  ec2_arn_prefix = "arn:aws:ec2:${var.aws_region}:${local.account_id}"
+  role_names = { for environment in var.environments : environment => "aws-fullstack-lab-${environment}-apply" }
+
+  ec2_arn_prefix = "arn:aws:ec2:${var.region}:${var.account_id}"
 
   # 서비스 기반 모듈이 만드는 리소스다. 생성할 때 자기 환경의 Environment 태그가
   # 있어야 하고, 이후 변경도 이 태그로 해당 환경에만 허용된다.
@@ -12,15 +18,15 @@ locals {
   ]
 }
 
-data "aws_iam_policy_document" "foundation_apply_assume" {
-  for_each = local.environments
+data "aws_iam_policy_document" "assume" {
+  for_each = var.environments
 
   statement {
     actions = ["sts:AssumeRoleWithWebIdentity"]
 
     principals {
       type        = "Federated"
-      identifiers = [aws_iam_openid_connect_provider.github.arn]
+      identifiers = [var.oidc_provider_arn]
     }
 
     condition {
@@ -32,17 +38,17 @@ data "aws_iam_policy_document" "foundation_apply_assume" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["${var.github_repository_subject}:environment:${each.key}-apply"]
+      values   = ["${var.repository_subject}:environment:${each.key}-apply"]
     }
   }
 }
 
-resource "aws_iam_role" "foundation_apply" {
-  for_each = local.environments
+resource "aws_iam_role" "this" {
+  for_each = var.environments
 
-  name                 = "aws-fullstack-lab-${each.key}-apply"
-  assume_role_policy   = data.aws_iam_policy_document.foundation_apply_assume[each.key].json
-  permissions_boundary = local.github_boundary_arn
+  name                 = local.role_names[each.key]
+  assume_role_policy   = data.aws_iam_policy_document.assume[each.key].json
+  permissions_boundary = var.boundary_arn
   max_session_duration = 3600
 
   tags = {
@@ -50,40 +56,38 @@ resource "aws_iam_role" "foundation_apply" {
     Environment = each.key
     Purpose     = "foundation-apply"
   }
-
-  depends_on = [aws_iam_policy.github_boundary]
 }
 
-data "aws_iam_policy_document" "foundation_apply" {
-  for_each = local.environments
+data "aws_iam_policy_document" "permissions" {
+  for_each = var.environments
 
   statement {
     sid       = "ListStateBucket"
     actions   = ["s3:ListBucket"]
-    resources = [aws_s3_bucket.state.arn]
+    resources = [var.state_bucket_arn]
   }
 
   statement {
     sid       = "ReadWriteOwnState"
     actions   = ["s3:GetObject", "s3:PutObject"]
-    resources = ["${aws_s3_bucket.state.arn}/${each.key}/terraform.tfstate"]
+    resources = ["${var.state_bucket_arn}/${each.key}/terraform.tfstate"]
   }
 
   statement {
     sid       = "LockOwnState"
     actions   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
-    resources = ["${aws_s3_bucket.state.arn}/${each.key}/terraform.tfstate.tflock"]
+    resources = ["${var.state_bucket_arn}/${each.key}/terraform.tfstate.tflock"]
   }
 
   statement {
     sid       = "ReadFoundationNetwork"
-    actions   = local.foundation_read_actions
+    actions   = var.read_actions
     resources = ["*"]
 
     condition {
       test     = "StringEquals"
       variable = "aws:RequestedRegion"
-      values   = [var.aws_region]
+      values   = [var.region]
     }
   }
 
@@ -253,18 +257,14 @@ data "aws_iam_policy_document" "foundation_apply" {
       "ecr:TagResource",
       "ecr:UntagResource",
     ]
-    resources = [local.web_repository_arns[each.key]]
+    resources = [var.repository_arns[each.key]]
   }
 }
 
-resource "aws_iam_role_policy" "foundation_apply" {
-  for_each = local.environments
+resource "aws_iam_role_policy" "this" {
+  for_each = var.environments
 
   name   = "terraform-foundation-apply"
-  role   = aws_iam_role.foundation_apply[each.key].name
-  policy = data.aws_iam_policy_document.foundation_apply[each.key].json
-}
-
-output "foundation_apply_role_arns" {
-  value = { for environment, role in aws_iam_role.foundation_apply : environment => role.arn }
+  role   = aws_iam_role.this[each.key].name
+  policy = data.aws_iam_policy_document.permissions[each.key].json
 }

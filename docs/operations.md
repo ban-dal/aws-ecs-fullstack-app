@@ -6,7 +6,7 @@
 
 | 대상 | 적용 주체 | 경로 |
 | --- | --- | --- |
-| 서비스 기반 (`infra/plan`: VPC·서브넷·보안 그룹·ECR) | GitHub 환경별 apply 역할 | [4절](#4-서비스-기반-적용)의 `Apply service foundation` |
+| 서비스 기반 (`infra/environments`: VPC·보안 그룹·ECR 저장소) | GitHub 환경별 apply 역할 | [4절](#4-서비스-기반-적용)의 `Apply service foundation` |
 | bootstrap 중 state 버킷, OIDC 제공자, GitHub 역할의 정책·신뢰 정책 | 운영 역할 `aws-fullstack-lab-bootstrap-operator` | [2절](#2-bootstrap-변경-적용)의 `scripts/bootstrap.sh` |
 | bootstrap 중 운영 사용자·역할, Budget, GitHub 역할 boundary 정책, ECR 레지스트리 스캔 설정 | 계정 root 세션 | [2절](#2-bootstrap-변경-적용)의 `scripts/bootstrap.sh` |
 | 콘솔 비밀번호, MFA 장치 | 사용자 본인 | IAM 콘솔 |
@@ -61,12 +61,12 @@ aws sts get-caller-identity
 
 ## 2. bootstrap 변경 적용
 
-PR의 환경별 plan은 `infra/plan`만 실행하므로 bootstrap 변경을 보여 주지 않는다. bootstrap을 바꾸는 PR은 작성 중에 `scripts/bootstrap.sh plan`을 실행해 변경 요약과 정책 테스트 결과를 PR 본문에 적는다.
+PR의 환경별 plan은 `infra/environments`만 실행하므로 bootstrap 변경을 보여 주지 않는다. bootstrap을 바꾸는 PR은 작성 중에 `scripts/bootstrap.sh plan`을 실행해 변경 요약과 정책 테스트 결과를 PR 본문에 적는다.
 
 PR merge 후:
 
 1. `main`을 최신으로 받고 [누가 무엇을 적용하나](#누가-무엇을-적용하나)에 따라 프로필을 고른다.
-2. `scripts/bootstrap.sh plan`을 실행한다. 저장 plan을 만들고, 생성·수정·삭제 요약을 출력하고, [정책 테스트](../infra/bootstrap/policy-tests/iam.test.mjs)를 실행한다. 요약이 PR에 적은 범위와 다르거나 테스트가 실패하면 중단한다.
+2. `scripts/bootstrap.sh plan`을 실행한다. 저장 plan을 만들고, 생성·수정·삭제 요약을 출력하고, [정책 테스트](../infra/bootstrap/tests/iam.test.mjs)를 실행한다. 요약이 PR에 적은 범위와 다르거나 테스트가 실패하면 중단한다.
 3. `scripts/bootstrap.sh apply`로 같은 저장 plan을 적용한다. `main`이 `origin/main`과 같고, plan을 만든 commit과 같고, 커밋하지 않은 변경이 없을 때만 실행된다. 적용 후 plan이 변경 없음인지 확인하고 저장 plan을 지운다.
 4. GitHub 변수 등 후속 설정이 PR에 적혀 있으면 곧바로 진행하고 `scripts/check-github-settings.sh`로 확인한다.
 5. 스크립트 출력(호출 주체, commit, 변경 요약, 사후 plan)을 해당 PR에 댓글로 남긴다.
@@ -75,7 +75,7 @@ PR merge 후:
 
 ## 3. GitHub 설정
 
-`scripts/check-github-settings.sh`가 기대하는 설정의 기준이다. 환경별 보호 규칙, `*-apply`의 `main` 브랜치 제한, 저장소 변수(`TF_STATE_BUCKET`, `AWS_ACCOUNT_ID`, `AWS_REGION`), 환경별 역할 ARN 변수를 확인하고, 어긋난 항목을 `FAIL`로 출력한다. 설정은 바꾸지 않는다. 역할 ARN은 bootstrap output(`plan_role_arns`, `foundation_apply_role_arns`)과 같아야 한다.
+`scripts/check-github-settings.sh`가 기대하는 설정의 기준이다. 환경별 보호 규칙, `*-apply`의 `main` 브랜치 제한, 저장소 변수(`TF_STATE_BUCKET`, `AWS_ACCOUNT_ID`, `AWS_REGION`), 환경별 역할 ARN 변수를 확인하고, 어긋난 항목을 `FAIL`로 출력한다. 설정은 바꾸지 않는다. 역할 ARN은 bootstrap output(`plan_role_arns`, `apply_role_arns`)과 같아야 한다.
 
 ```bash
 scripts/check-github-settings.sh
@@ -92,7 +92,7 @@ PR에서는 두 환경의 plan 요약과 바뀐 인프라 파일이 PR 댓글 �
 3. `*-apply`를 승인한다. 적용 작업은 plan을 다시 만들어, 승인한 plan과 변경 내용이 같을 때만 적용한다. 그사이 인프라가 바뀌었으면 적용하지 않고 실패하므로 workflow를 다시 실행한다. 서비스 기반 모듈 안의 생성·수정만 허용하고 삭제·교체는 막는다([`scripts/tfplan.sh`](../scripts/tfplan.sh)).
 4. 적용 기록은 GitHub Deployments의 `*-apply` 환경에 자동으로 남는다. 계기가 된 PR에 실행 링크를 댓글로 남긴다.
 
-`prod`는 `preprod` 결과와 비용을 검토한 뒤 따로 결정한다. 서비스 기반 plan은 PR이나 이 workflow의 plan 단계에서 확인한다. 운영 역할에는 EC2 읽기 권한이 없어 로컬 `infra/plan` plan은 지원하지 않는다.
+`prod`는 `preprod` 결과와 비용을 검토한 뒤 따로 결정한다. 서비스 기반 plan은 PR이나 이 workflow의 plan 단계에서 확인한다. 운영 역할에는 EC2 읽기 권한이 없어 로컬 `infra/environments` plan은 지원하지 않는다.
 
 기본 AZ는 `ap-northeast-2a`, `ap-northeast-2c`다. 계정에서 쓸 수 없으면 두 환경의 `availability_zones`를 같은 순서로 지정한다. 적용 후 AZ 순서를 바꾸면 서브넷이 교체된다.
 
@@ -127,7 +127,7 @@ PR에서는 두 환경의 plan 요약과 바뀐 인프라 파일이 PR 댓글 �
 ## 6. 비용 관리
 
 - 새 AWS Free plan은 최대 6개월 또는 크레딧 소진 시 끝난다(2026년 9월 기준). Billing의 Free Tier 85% 알림과 크레딧 잔여량을 확인한다.
-- Budget([`main.tf`](../infra/bootstrap/main.tf))은 이메일로 알리기만 하고 지출을 멈추지 않는다.
+- Budget([`modules/budgets`](../infra/modules/budgets/main.tf))은 이메일로 알리기만 하고 지출을 멈추지 않는다.
 - IAM, VPC, Internet Gateway 자체는 무료다. S3 state 저장·요청과 ECR 이미지 저장·전송은 사용량에 따라 과금된다. state 버킷의 이전 버전은 lifecycle 규칙으로 만료된다.
 - 퍼블릭 IPv4, EC2, ALB, Route 53 호스팅 영역은 과금 대상이다. 추가하는 PR에서 서울 리전 요금으로 비용을 계산하고, 공개 앱은 기본적으로 끈다. NAT Gateway는 쓰지 않는다.
 
