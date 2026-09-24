@@ -1,8 +1,25 @@
 # 단일 AZ의 ECS 호스트다. NAT와 ALB 없이 ECR·SSM에 나가야 하므로 공개 서브넷에
 # 명시적으로 IPv4를 할당한다. 보안 그룹은 WireGuard UDP만 공개한다.
+# ECS 권장 AMI의 SSM 동적 참조는 Launch Template 생성자에게 ssm:GetParameters를
+# 요구한다. 공통 apply 역할의 IAM을 늘리지 않도록 EC2 이미지 조회로 ARM64 ECS AMI를 찾는다.
+data "aws_ami" "ecs" {
+  most_recent = true
+  owners      = ["amazon"]
+
+  filter {
+    name   = "name"
+    values = ["al2023-ami-ecs-hvm-*-arm64"]
+  }
+
+  filter {
+    name   = "architecture"
+    values = ["arm64"]
+  }
+}
+
 resource "aws_launch_template" "this" {
   name_prefix   = "${var.name_prefix}-ecs-"
-  image_id      = "resolve:ssm:/aws/service/ecs/optimized-ami/amazon-linux-2023/arm64/recommended/image_id"
+  image_id      = data.aws_ami.ecs.id
   instance_type = "t4g.small"
 
   iam_instance_profile {
