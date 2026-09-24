@@ -6,7 +6,7 @@
 
 - 목표와 사용자 동작은 `docs/product.md`, 화면과 접근성 기준은 `docs/design.md`, 큰 구조는 `docs/architecture.md`, 운영 절차는 `docs/operations.md`를 기준으로 한다.
 - Next.js 앱은 `apps/web`에 둔다. 새 공유 패키지는 `packages/*`에 둔다.
-- Terraform은 `infra/README.md`의 구조와 규칙을 따른다. 계정·IAM은 `infra/bootstrap`, 환경별 서비스 리소스는 `infra/environments`에서 호출하고, 리소스는 AWS 서비스 이름으로 나눈 `infra/modules/<서비스>-<기능>/`에 둔다.
+- Terraform은 `infra/README.md`의 구조와 규칙을 따른다. 계정·IAM은 `infra/bootstrap`, 환경별 서비스 리소스는 `infra/environments/<환경>`에서 호출하고, 리소스는 AWS 서비스 이름으로 나눈 `infra/modules/<서비스>-<기능>/`에 둔다.
 - 현재는 pnpm workspaces만 사용한다. 빌드 단계가 복잡해질 때 Turbo를 추가한다.
 - AWS 리소스나 비용을 늘리는 변경은 예상 비용, 종료 방법, 무료 플랜 영향, PR plan 결과를 설명한다. `enable_public_app`의 기본값은 `false`로 유지한다.
 - Terraform state, `.tfvars`, 계정 비밀, AWS 자격 증명은 커밋하지 않는다. GitHub Actions는 OIDC를 사용한다.

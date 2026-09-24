@@ -6,7 +6,7 @@
 
 | 대상 | 적용 주체 | 경로 |
 | --- | --- | --- |
-| 서비스 기반 (`infra/environments`: VPC·보안 그룹·ECR 저장소) | GitHub 환경별 apply 역할 | [4절](#4-서비스-기반-적용)의 `Apply service foundation` |
+| 서비스 기반 (`infra/environments/<환경>`: VPC·보안 그룹·ECR 저장소) | GitHub 환경별 apply 역할 | [4절](#4-서비스-기반-적용)의 `Apply service foundation` |
 | bootstrap 중 state 버킷, OIDC 제공자, GitHub 역할의 정책·신뢰 정책 | 운영 역할 `aws-fullstack-lab-bootstrap-operator` | [2절](#2-bootstrap-변경-적용)의 `scripts/bootstrap.sh` |
 | bootstrap 중 운영 사용자·역할, Budget, GitHub 역할 boundary 정책, ECR 레지스트리 스캔 설정 | 계정 root 세션 | [2절](#2-bootstrap-변경-적용)의 `scripts/bootstrap.sh` |
 | 콘솔 비밀번호, MFA 장치 | 사용자 본인 | IAM 콘솔 |
@@ -61,7 +61,7 @@ aws sts get-caller-identity
 
 ## 2. bootstrap 변경 적용
 
-PR의 환경별 plan은 `infra/environments`만 실행하므로 bootstrap 변경을 보여 주지 않는다. bootstrap을 바꾸는 PR은 작성 중에 `scripts/bootstrap.sh plan`을 실행해 변경 요약과 정책 테스트 결과를 PR 본문에 적는다.
+PR의 환경별 plan은 `infra/environments/<환경>`만 실행하므로 bootstrap 변경을 보여 주지 않는다. bootstrap을 바꾸는 PR은 작성 중에 `scripts/bootstrap.sh plan`을 실행해 변경 요약과 정책 테스트 결과를 PR 본문에 적는다.
 
 PR merge 후:
 
@@ -92,7 +92,7 @@ PR에서는 두 환경의 plan 요약과 바뀐 인프라 파일이 PR 댓글 �
 3. `*-apply`를 승인한다. 적용 작업은 plan을 다시 만들어, 승인한 plan과 변경 내용이 같을 때만 적용한다. 그사이 인프라가 바뀌었으면 적용하지 않고 실패하므로 workflow를 다시 실행한다. 서비스 기반 모듈 안의 생성·수정만 허용하고 삭제·교체는 막는다([`scripts/tfplan.sh`](../scripts/tfplan.sh)).
 4. 적용 기록은 GitHub Deployments의 `*-apply` 환경에 자동으로 남는다. 계기가 된 PR에 실행 링크를 댓글로 남긴다.
 
-`prod`는 `preprod` 결과와 비용을 검토한 뒤 따로 결정한다. 서비스 기반 plan은 PR이나 이 workflow의 plan 단계에서 확인한다. 운영 역할에는 EC2 읽기 권한이 없어 로컬 `infra/environments` plan은 지원하지 않는다.
+`prod`는 `preprod` 결과와 비용을 검토한 뒤 따로 결정한다. 서비스 기반 plan은 PR이나 이 workflow의 plan 단계에서 확인한다. 운영 역할에는 EC2 읽기 권한이 없어 로컬 `infra/environments/<환경>` plan은 지원하지 않는다.
 
 기본 AZ는 `ap-northeast-2a`, `ap-northeast-2c`다. 계정에서 쓸 수 없으면 두 환경의 `availability_zones`를 같은 순서로 지정한다. 적용 후 AZ 순서를 바꾸면 서브넷이 교체된다.
 

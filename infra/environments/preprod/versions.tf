@@ -8,8 +8,8 @@ terraform {
     }
   }
 
-  # bucket·key·region은 init의 -backend-config로 넘긴다. 환경마다 key가
-  # <environment>/terraform.tfstate로 다르다.
+  # bucket·key·region은 init의 -backend-config로 넘긴다. key는
+  # <environment>/terraform.tfstate다.
   backend "s3" {
     use_lockfile = true
   }

@@ -13,7 +13,7 @@ locals {
 
   budget_name = "aws-fullstack-lab-monthly"
 
-  # 아래 두 값은 infra/environments가 만드는 리소스와 맞아야 한다. ECR 저장소 이름은
+  # 아래 두 값은 infra/environments/<환경>이 만드는 리소스와 맞아야 한다. ECR 저장소 이름은
   # environments의 ecr-repository 이름과 같고, 읽기 액션은 그 리소스를 refresh할 때 쓴다.
   web_repository_arns = {
     for environment in local.environments :

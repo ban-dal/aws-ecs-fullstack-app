@@ -23,8 +23,12 @@ jobs:
       - run: terraform fmt -check -recursive infra
       - run: terraform -chdir=infra/bootstrap init -backend=false -input=false
       - run: terraform -chdir=infra/bootstrap validate
-      - run: terraform -chdir=infra/environments init -backend=false -input=false
-      - run: terraform -chdir=infra/environments validate
+      - name: Validate environment roots
+        run: |
+          for root in infra/environments/*/; do
+            terraform -chdir="$root" init -backend=false -input=false
+            terraform -chdir="$root" validate
+          done
       - name: Check script syntax
         run: |
           for script in scripts/*.sh; do bash -n "$script"; done
@@ -71,15 +75,15 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
       - name: Initialize environment state
         run: >-
-          terraform -chdir=infra/environments init -input=false
+          terraform -chdir="infra/environments/$TARGET_ENV" init -input=false
           -backend-config="bucket=$TF_STATE_BUCKET"
           -backend-config="key=$TARGET_ENV/terraform.tfstate"
           -backend-config="region=$AWS_REGION"
       - name: Plan environment
         run: |
-          terraform -chdir=infra/environments plan -input=false -no-color -lock-timeout=5m \
-            -var="environment=$TARGET_ENV" -out="$RUNNER_TEMP/plan.tfplan"
-          terraform -chdir=infra/environments show -json "$RUNNER_TEMP/plan.tfplan" > "$RUNNER_TEMP/plan.json"
+          terraform -chdir="infra/environments/$TARGET_ENV" plan -input=false -no-color -lock-timeout=5m \
+            -out="$RUNNER_TEMP/plan.tfplan"
+          terraform -chdir="infra/environments/$TARGET_ENV" show -json "$RUNNER_TEMP/plan.tfplan" > "$RUNNER_TEMP/plan.json"
           summary="$RUNNER_TEMP/summary/$TARGET_ENV.md"
           mkdir -p "$(dirname "$summary")"
           {
