@@ -18,6 +18,7 @@ infra/
 | [`iam-github-oidc`](modules/iam-github-oidc/main.tf) | GitHub OIDC 제공자, GitHub 역할 boundary | bootstrap |
 | [`iam-github-plan`](modules/iam-github-plan/main.tf) | 환경별 PR plan 역할 | bootstrap |
 | [`iam-github-apply`](modules/iam-github-apply/main.tf) | 환경별 서비스 적용 역할 | bootstrap |
+| [`iam-github-image`](modules/iam-github-image/main.tf) | 환경별 이미지 push 역할(main 브랜치만) | bootstrap |
 | [`iam-operator`](modules/iam-operator/main.tf) | 사람의 IAM 사용자와 MFA 역할 | bootstrap |
 | [`route53-zone`](modules/route53-zone/main.tf) | 서비스 도메인 `aws.bandal.dev` 영역과 CAA | bootstrap |
 | [`s3-terraform-state`](modules/s3-terraform-state/main.tf) | Terraform state 버킷 | bootstrap |
