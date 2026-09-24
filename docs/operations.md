@@ -72,7 +72,7 @@ PR merge 후:
 4. GitHub 변수 등 후속 설정이 PR에 적혀 있으면 곧바로 진행하고 `scripts/check-github-settings.sh`로 확인한다.
 5. 스크립트 출력(호출 주체, commit, 변경 요약, 사후 plan)을 해당 PR에 댓글로 남긴다.
 
-환경별 IAM 역할에서 공통 역할로 옮기는 변경을 적용한 뒤에는 GitHub 네 환경의 이전 `AWS_PLAN_ROLE_ARN`·`AWS_APPLY_ROLE_ARN` 변수를 삭제한다. workflow는 계정 ID secret과 공통 역할 이름으로 ARN을 만들기 때문에 이 변수들을 사용하지 않는다. `scripts/check-github-settings.sh`로 삭제와 환경 보호 규칙을 확인한다.
+환경별 IAM 역할에서 공통 역할로 옮기는 변경을 적용한 뒤에는 GitHub 네 환경의 이전 `AWS_PLAN_ROLE_ARN`·`AWS_APPLY_ROLE_ARN` 변수를 삭제한다. 전환 중에는 기존 변수를 사용하고, 삭제 후에는 계정 ID secret과 공통 역할 이름으로 ARN을 만든다. `scripts/check-github-settings.sh`로 삭제와 환경 보호 규칙을 확인한다.
 
 `terraform.tfvars`(계정 ID, 버킷 이름, 알림 이메일 등)는 커밋하지 않는다. 저장 plan은 사용자 임시 디렉터리에만 둔다.
 

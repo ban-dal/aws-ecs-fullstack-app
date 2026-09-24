@@ -17,14 +17,13 @@ on:
       - scripts/push-image.sh
   push:
     branches: [main]
+    # workflow·push 스크립트 변경만으로는 이미지를 올리지 않는다. 필요하면 main에서 수동 실행한다.
     paths:
       - apps/**
       - package.json
       - pnpm-lock.yaml
       - pnpm-workspace.yaml
       - .npmrc
-      - .github/workflows/image.yml
-      - scripts/push-image.sh
   workflow_dispatch:
 
 permissions:

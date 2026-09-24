@@ -40,7 +40,7 @@ GitHub Actions는 AWS 장기 키 없이 OIDC 역할로 AWS에 접근한다. 그�
 | Variable | 저장소 | `AWS_REGION` | `ap-northeast-2` (state 버킷과 서비스 리소스의 리전) |
 
 - 계정 ID와 버킷 이름을 변수가 아닌 secret으로 두는 이유는 공개 Actions 로그에서 가리기 위해서다. 같은 이름의 저장소 변수는 두지 않는다.
-- plan·apply·image workflow는 계정 ID secret과 공통 역할 이름으로 ARN을 만든다. 이전 환경별 `AWS_PLAN_ROLE_ARN`·`AWS_APPLY_ROLE_ARN` 변수는 bootstrap 변경 적용 후 삭제한다.
+- plan·apply workflow는 이전 환경별 역할 변수가 있으면 전환 기간에만 사용한다. bootstrap 변경 적용 후 변수를 삭제하면 계정 ID secret과 공통 역할 이름으로 ARN을 만든다. image workflow는 공통 역할 이름을 사용한다.
 - 네 환경에는 `ban-dal` 필수 승인자를 두고, `*-apply` 환경은 `main` 브랜치에서만 배포하게 한다. 환경 보호 규칙은 변수보다 먼저 만든다.
 - secret은 명령줄 인자로 넘기지 말고, 프롬프트에 붙여 넣거나 로컬 파일에서 읽어 넣는다. 셸 기록과 로그에 값을 남기지 않기 위해서다.
 
