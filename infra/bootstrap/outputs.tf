@@ -26,6 +26,14 @@ output "image_role_arns" {
   value = module.iam_github_image.role_arns
 }
 
+output "ecs_host_role_arns" {
+  value = module.iam_ecs_roles.host_role_arns
+}
+
+output "ecs_task_execution_role_arns" {
+  value = module.iam_ecs_roles.execution_role_arns
+}
+
 output "operator_user_arn" {
   value = module.iam_operator.user_arn
 }

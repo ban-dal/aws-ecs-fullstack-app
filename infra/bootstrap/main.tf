@@ -13,24 +13,31 @@ locals {
 
   budget_name = "aws-fullstack-lab-monthly"
 
-  # 아래 두 값은 infra/environments/<환경>이 만드는 리소스와 맞아야 한다. ECR 저장소 이름은
-  # environments의 ecr-repository 이름과 같고, 읽기 액션은 그 리소스를 refresh할 때 쓴다.
+  # 아래 값은 infra/environments/<환경>이 만드는 리소스와 맞아야 한다. ECR 저장소 이름은
+  # environments의 ecr-repository 이름과 같고, 로그 그룹은 다른 리소스처럼
+  # aws-fullstack-lab-<환경>-으로 시작한다. 읽기 액션은 그 리소스를 refresh할 때 쓴다.
   web_repository_arns = {
     for environment in local.environments :
     environment => "arn:aws:ecr:${var.aws_region}:${local.account_id}:repository/aws-fullstack-lab-${environment}-web"
   }
 
+  # 로그 그룹 이름에는 /를 쓰지 않는다. IAM 정책 시뮬레이터가 이름에 /가 든 로그 스트림
+  # ARN은 어떤 정책으로도 거부로 판정해서, 정책 테스트가 쓰기 권한을 확인하지 못한다.
+  log_group_arns = {
+    for environment in local.environments :
+    environment => "arn:aws:logs:${var.aws_region}:${local.account_id}:log-group:aws-fullstack-lab-${environment}-*"
+  }
+
+  # 조회는 리소스를 바꾸지 않으므로 서비스 단위 Describe·List로 준다. provider 버전마다
+  # refresh에 쓰는 조회 API가 달라, 액션을 하나씩 적으면 빠질 때마다 root 적용이 필요하다.
   foundation_read_actions = [
-    "ec2:DescribeAvailabilityZones",
-    "ec2:DescribeInternetGateways",
-    "ec2:DescribeNetworkInterfaces",
-    "ec2:DescribeRouteTables",
-    "ec2:DescribeSecurityGroupRules",
-    "ec2:DescribeSecurityGroups",
-    "ec2:DescribeSubnets",
-    "ec2:DescribeTags",
-    "ec2:DescribeVpcAttribute",
-    "ec2:DescribeVpcs",
+    "autoscaling:Describe*",
+    "ec2:Describe*",
+    "ecs:Describe*",
+    "ecs:List*",
+    "logs:Describe*",
+    "logs:ListTagsForResource",
+    "logs:ListTagsLogGroup",
   ]
 }
 
@@ -47,6 +54,10 @@ module "iam_github_oidc" {
   environments     = local.environments
   region           = var.aws_region
   state_bucket_arn = module.s3_terraform_state.arn
+  passable_role_arns = concat(
+    values(module.iam_ecs_roles.host_role_arns),
+    values(module.iam_ecs_roles.execution_role_arns),
+  )
 }
 
 module "iam_github_plan" {
@@ -66,15 +77,18 @@ module "iam_github_plan" {
 module "iam_github_apply" {
   source = "../modules/iam-github-apply"
 
-  account_id         = local.account_id
-  environments       = local.environments
-  region             = var.aws_region
-  repository_subject = var.github_repository_subject
-  oidc_provider_arn  = module.iam_github_oidc.oidc_provider_arn
-  boundary_arn       = module.iam_github_oidc.boundary_arn
-  state_bucket_arn   = module.s3_terraform_state.arn
-  read_actions       = local.foundation_read_actions
-  repository_arns    = local.web_repository_arns
+  account_id          = local.account_id
+  environments        = local.environments
+  region              = var.aws_region
+  repository_subject  = var.github_repository_subject
+  oidc_provider_arn   = module.iam_github_oidc.oidc_provider_arn
+  boundary_arn        = module.iam_github_oidc.boundary_arn
+  state_bucket_arn    = module.s3_terraform_state.arn
+  read_actions        = local.foundation_read_actions
+  repository_arns     = local.web_repository_arns
+  host_role_arns      = module.iam_ecs_roles.host_role_arns
+  execution_role_arns = module.iam_ecs_roles.execution_role_arns
+  log_group_arns      = local.log_group_arns
 }
 
 module "iam_github_image" {
@@ -101,7 +115,30 @@ module "iam_operator" {
     values(module.iam_github_image.role_arns),
   )
   github_boundary_arn = local.github_boundary_arn
-  budget_name         = local.budget_name
+  service_identity_arns = concat(
+    values(module.iam_ecs_roles.host_role_arns),
+    values(module.iam_ecs_roles.instance_profile_arns),
+    values(module.iam_ecs_roles.execution_role_arns),
+  )
+  budget_name = local.budget_name
+}
+
+# ECS 호스트와 태스크가 쓰는 역할이다. GitHub 역할이 아니므로 boundary가 없고, 운영
+# 역할은 읽기만 한다.
+module "iam_ecs_roles" {
+  source = "../modules/iam-ecs-roles"
+
+  account_id      = local.account_id
+  environments    = local.environments
+  region          = var.aws_region
+  repository_arns = local.web_repository_arns
+  log_group_arns  = local.log_group_arns
+}
+
+module "iam_service_linked_roles" {
+  source = "../modules/iam-service-linked-roles"
+
+  service_names = ["autoscaling.amazonaws.com", "ecs.amazonaws.com"]
 }
 
 module "budgets" {

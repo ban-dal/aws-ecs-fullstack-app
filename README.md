@@ -7,7 +7,7 @@ Next.js 앱과 AWS 인프라를 한 저장소에서 관리하는 프로젝트다
 | 경로 | 용도 |
 | --- | --- |
 | `apps/web` | Next.js 앱과 `/api/health` |
-| `infra/bootstrap` | 계정·IAM 루트: state 버킷, GitHub OIDC 역할과 boundary, 비용 Budget, 사람의 운영 역할, ECR 스캔 |
+| `infra/bootstrap` | 계정·IAM 루트: state 버킷, GitHub OIDC 역할과 boundary, ECS 호스트·태스크 실행 역할, 비용 Budget, 사람의 운영 역할, ECR 스캔 |
 | `infra/environments/<환경>` | preprod·prod 서비스 루트: VPC, 보안 그룹, ECR 저장소 |
 | `infra/modules` | AWS 서비스 이름으로 나눈 모듈. 구조와 규칙은 [infra/README.md](infra/README.md) |
 | `.github/workflows/ci.yml` | PR과 main의 앱 타입 검사·빌드 |

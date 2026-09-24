@@ -1,21 +1,30 @@
 # 환경별 서비스 기반 적용 역할이다. main 브랜치의 *-apply GitHub 환경만 신뢰한다.
-# 자기 state key, 자기 ECR 저장소, Environment 태그가 같은 EC2 네트워크 리소스만
-# 만들고 바꾸고 지울 수 있다.
+# 자기 state key, 자기 ECR 저장소, Environment 태그가 같은 EC2 리소스, 이름이
+# aws-fullstack-lab-<환경>-으로 시작하는 ECS·Auto Scaling 리소스와 자기 환경 로그 그룹만
+# 만들고 바꾸고 지울 수 있다. ECS 역할은 bootstrap이 만든 자기 환경 역할만 넘긴다.
 
 locals {
   role_names = { for environment in var.environments : environment => "aws-fullstack-lab-${environment}-apply" }
 
-  ec2_arn_prefix = "arn:aws:ec2:${var.region}:${var.account_id}"
+  ec2_arn_prefix         = "arn:aws:ec2:${var.region}:${var.account_id}"
+  ecs_arn_prefix         = "arn:aws:ecs:${var.region}:${var.account_id}"
+  autoscaling_arn_prefix = "arn:aws:autoscaling:${var.region}:${var.account_id}"
 
-  # 서비스 기반 모듈이 만드는 리소스다. 생성할 때 자기 환경의 Environment 태그가
-  # 있어야 하고, 이후 변경도 이 태그로 해당 환경에만 허용된다.
+  # 서비스 기반 모듈이 태그와 함께 만드는 EC2 리소스다. 생성할 때 자기 환경의
+  # Environment 태그가 있어야 하고, 이후 변경도 이 태그로 해당 환경에만 허용된다.
+  # RunInstances는 Auto Scaling group이 호스트를 띄울 때 태그를 붙이는 경우다.
   foundation_create_actions = [
     "ec2:CreateInternetGateway",
+    "ec2:CreateLaunchTemplate",
     "ec2:CreateRouteTable",
     "ec2:CreateSecurityGroup",
     "ec2:CreateSubnet",
     "ec2:CreateVpc",
+    "ec2:RunInstances",
   ]
+
+  # 호스트 비용의 상한이다. 다른 유형이 필요하면 비용을 검토하고 bootstrap PR로 바꾼다.
+  host_instance_types = ["t4g.micro"]
 }
 
 data "aws_iam_policy_document" "assume" {
@@ -104,15 +113,17 @@ data "aws_iam_policy_document" "permissions" {
   }
 
   statement {
-    sid = "CreateTaggedNetworkResources"
+    sid = "CreateTaggedEc2Resources"
     actions = [
       "ec2:CreateInternetGateway",
+      "ec2:CreateLaunchTemplate",
       "ec2:CreateRouteTable",
       "ec2:CreateSecurityGroup",
       "ec2:CreateSubnet",
     ]
     resources = [
       "${local.ec2_arn_prefix}:internet-gateway/*",
+      "${local.ec2_arn_prefix}:launch-template/*",
       "${local.ec2_arn_prefix}:route-table/*",
       "${local.ec2_arn_prefix}:security-group/*",
       "${local.ec2_arn_prefix}:subnet/*",
@@ -162,14 +173,17 @@ data "aws_iam_policy_document" "permissions" {
   }
 
   statement {
-    sid = "ManageOwnNetwork"
+    sid = "ManageOwnEc2Resources"
     actions = [
       "ec2:AssociateRouteTable",
       "ec2:AttachInternetGateway",
       "ec2:AuthorizeSecurityGroupEgress",
       "ec2:AuthorizeSecurityGroupIngress",
+      "ec2:CreateLaunchTemplateVersion",
       "ec2:CreateRoute",
       "ec2:DeleteInternetGateway",
+      "ec2:DeleteLaunchTemplate",
+      "ec2:DeleteLaunchTemplateVersions",
       "ec2:DeleteRoute",
       "ec2:DeleteRouteTable",
       "ec2:DeleteSecurityGroup",
@@ -177,6 +191,7 @@ data "aws_iam_policy_document" "permissions" {
       "ec2:DeleteVpc",
       "ec2:DetachInternetGateway",
       "ec2:DisassociateRouteTable",
+      "ec2:ModifyLaunchTemplate",
       "ec2:ModifySecurityGroupRules",
       "ec2:ModifySubnetAttribute",
       "ec2:ModifyVpcAttribute",
@@ -194,7 +209,7 @@ data "aws_iam_policy_document" "permissions" {
   }
 
   # 보안 그룹 규칙은 태그가 없는 하위 리소스다. 부모 보안 그룹은
-  # ManageOwnNetwork에서 여전히 태그로 검사한다.
+  # ManageOwnEc2Resources에서 여전히 태그로 검사한다.
   statement {
     sid = "ManageRulesOfOwnSecurityGroups"
     actions = [
@@ -258,6 +273,174 @@ data "aws_iam_policy_document" "permissions" {
       "ecr:UntagResource",
     ]
     resources = [var.repository_arns[each.key]]
+  }
+
+  # 아래 네 statement는 호스트 실행 권한이다. Auto Scaling group을 만들거나 바꿀 때 EC2 Auto
+  # Scaling은 호출자가 시작 템플릿으로 인스턴스를 실행할 수 있는지 확인하고, 실제 실행은
+  # 서비스 연결 역할이 한다. 자기 환경의 시작 템플릿·서브넷·보안 그룹, Amazon이 소유한 AMI,
+  # 정한 인스턴스 유형일 때만 허용한다.
+  statement {
+    sid     = "RunHostsInOwnNetwork"
+    actions = ["ec2:RunInstances"]
+    resources = [
+      "${local.ec2_arn_prefix}:launch-template/*",
+      "${local.ec2_arn_prefix}:security-group/*",
+      "${local.ec2_arn_prefix}:subnet/*",
+    ]
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:ResourceTag/Environment"
+      values   = [each.key]
+    }
+  }
+
+  statement {
+    sid       = "RunHostsFromAmazonImages"
+    actions   = ["ec2:RunInstances"]
+    resources = ["arn:aws:ec2:${var.region}::image/*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "ec2:Owner"
+      values   = ["amazon"]
+    }
+  }
+
+  statement {
+    sid       = "RunAllowedHostTypes"
+    actions   = ["ec2:RunInstances"]
+    resources = ["${local.ec2_arn_prefix}:instance/*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "ec2:InstanceType"
+      values   = local.host_instance_types
+    }
+  }
+
+  statement {
+    sid     = "RunHostVolumesAndInterfaces"
+    actions = ["ec2:RunInstances"]
+    resources = [
+      "${local.ec2_arn_prefix}:network-interface/*",
+      "${local.ec2_arn_prefix}:volume/*",
+    ]
+  }
+
+  statement {
+    sid       = "PassOwnHostRole"
+    actions   = ["iam:PassRole"]
+    resources = [var.host_role_arns[each.key]]
+
+    condition {
+      test     = "StringEquals"
+      variable = "iam:PassedToService"
+      values   = ["ec2.amazonaws.com"]
+    }
+  }
+
+  statement {
+    sid       = "PassOwnTaskExecutionRole"
+    actions   = ["iam:PassRole"]
+    resources = [var.execution_role_arns[each.key]]
+
+    condition {
+      test     = "StringEquals"
+      variable = "iam:PassedToService"
+      values   = ["ecs-tasks.amazonaws.com"]
+    }
+  }
+
+  statement {
+    sid       = "CreateOwnHostGroup"
+    actions   = ["autoscaling:CreateAutoScalingGroup"]
+    resources = ["${local.autoscaling_arn_prefix}:autoScalingGroup:*:autoScalingGroupName/aws-fullstack-lab-${each.key}-*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:RequestTag/Environment"
+      values   = [each.key]
+    }
+  }
+
+  statement {
+    sid = "ManageOwnHostGroup"
+    actions = [
+      "autoscaling:CreateOrUpdateTags",
+      "autoscaling:DeleteAutoScalingGroup",
+      "autoscaling:DeleteTags",
+      "autoscaling:ResumeProcesses",
+      "autoscaling:SetDesiredCapacity",
+      "autoscaling:SuspendProcesses",
+      "autoscaling:UpdateAutoScalingGroup",
+    ]
+    resources = ["${local.autoscaling_arn_prefix}:autoScalingGroup:*:autoScalingGroupName/aws-fullstack-lab-${each.key}-*"]
+  }
+
+  # 서비스 ARN에는 클러스터 이름이 들어가므로 이름 패턴이 다른 환경 클러스터 안의 서비스도
+  # 막는다.
+  statement {
+    sid     = "CreateOwnEcsResources"
+    actions = ["ecs:CreateCluster", "ecs:CreateService"]
+    resources = [
+      "${local.ecs_arn_prefix}:cluster/aws-fullstack-lab-${each.key}-*",
+      "${local.ecs_arn_prefix}:service/aws-fullstack-lab-${each.key}-*/*",
+    ]
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:RequestTag/Environment"
+      values   = [each.key]
+    }
+  }
+
+  # RegisterTaskDefinition은 리소스 수준 권한을 지원하지 않아 요청 태그로만 제한한다.
+  # 이전 revision은 남기므로(skip_destroy) 등록 해제·삭제 권한은 주지 않는다.
+  statement {
+    sid       = "RegisterOwnTaskDefinitions"
+    actions   = ["ecs:RegisterTaskDefinition"]
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:RequestTag/Environment"
+      values   = [each.key]
+    }
+  }
+
+  statement {
+    sid = "ManageOwnEcsResources"
+    actions = [
+      "ecs:DeleteCluster",
+      "ecs:DeleteService",
+      "ecs:PutClusterCapacityProviders",
+      "ecs:TagResource",
+      "ecs:UntagResource",
+      "ecs:UpdateCluster",
+      "ecs:UpdateClusterSettings",
+      "ecs:UpdateService",
+    ]
+    resources = [
+      "${local.ecs_arn_prefix}:cluster/aws-fullstack-lab-${each.key}-*",
+      "${local.ecs_arn_prefix}:service/aws-fullstack-lab-${each.key}-*/*",
+      "${local.ecs_arn_prefix}:task-definition/aws-fullstack-lab-${each.key}-*:*",
+    ]
+  }
+
+  statement {
+    sid = "ManageOwnLogGroups"
+    actions = [
+      "logs:CreateLogGroup",
+      "logs:DeleteLogGroup",
+      "logs:DeleteRetentionPolicy",
+      "logs:PutRetentionPolicy",
+      "logs:TagLogGroup",
+      "logs:TagResource",
+      "logs:UntagLogGroup",
+      "logs:UntagResource",
+    ]
+    resources = [var.log_group_arns[each.key]]
   }
 }
 

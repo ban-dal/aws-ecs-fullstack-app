@@ -36,3 +36,18 @@ variable "repository_arns" {
   type        = map(string)
   description = "환경별 ECR 저장소 ARN"
 }
+
+variable "host_role_arns" {
+  type        = map(string)
+  description = "환경별 ECS 호스트 역할 ARN. EC2에만 넘길 수 있다."
+}
+
+variable "execution_role_arns" {
+  type        = map(string)
+  description = "환경별 ECS 태스크 실행 역할 ARN. ECS 태스크에만 넘길 수 있다."
+}
+
+variable "log_group_arns" {
+  type        = map(string)
+  description = "환경별 CloudWatch 로그 그룹 ARN 패턴"
+}

@@ -9,7 +9,7 @@
 | 서비스 기반 (`infra/environments/<환경>`: VPC·보안 그룹·ECR 저장소) | GitHub 환경별 apply 역할 | [4절](#4-서비스-기반-적용)의 `Apply service foundation` |
 | 앱 이미지 (preprod·prod ECR) | GitHub 환경별 image 역할 | [이미지 빌드](#이미지-빌드)의 `Build image` |
 | bootstrap 중 state 버킷, OIDC 제공자, GitHub 역할의 정책·신뢰 정책 | 운영 역할 `aws-fullstack-lab-bootstrap-operator` | [2절](#2-bootstrap-변경-적용)의 `scripts/bootstrap.sh` |
-| bootstrap 중 운영 사용자·역할, Budget, GitHub 역할 boundary 정책, ECR 레지스트리 스캔 설정, 서비스 DNS 영역 | 계정 root 세션 | [2절](#2-bootstrap-변경-적용)의 `scripts/bootstrap.sh` |
+| bootstrap 중 운영 사용자·역할, Budget, GitHub 역할 boundary 정책, ECS 호스트·태스크 실행 역할, 서비스 연결 역할, ECR 레지스트리 스캔 설정, 서비스 DNS 영역 | 계정 root 세션 | [2절](#2-bootstrap-변경-적용)의 `scripts/bootstrap.sh` |
 | 콘솔 비밀번호, MFA 장치 | 사용자 본인 | IAM 콘솔 |
 | `bandal.dev`의 `aws` NS 위임 레코드 | 사용자 본인 | Vercel 대시보드([4절의 도메인 위임](#도메인-위임)) |
 

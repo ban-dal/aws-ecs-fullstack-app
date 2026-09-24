@@ -58,7 +58,8 @@ flowchart LR
 
 - **state 버킷** ([`s3-terraform-state`](../infra/modules/s3-terraform-state/main.tf)): 공개 접근 차단, HTTPS 강제, 암호화, 버전 관리.
 - **GitHub OIDC 역할** ([`iam-github-plan`](../infra/modules/iam-github-plan/main.tf), [`iam-github-apply`](../infra/modules/iam-github-apply/main.tf)): 저장소 immutable subject와 GitHub 환경 이름으로 신뢰를 제한하고, 환경별 plan·apply 역할이 자기 환경만 다룬다.
-- **permissions boundary** ([`iam-github-oidc`](../infra/modules/iam-github-oidc/main.tf)): 모든 GitHub 역할의 상한. IAM·STS 권한은 얻지 못한다.
+- **permissions boundary** ([`iam-github-oidc`](../infra/modules/iam-github-oidc/main.tf)): 모든 GitHub 역할의 상한. IAM은 bootstrap이 만든 ECS 역할을 넘기는 권한만 있고, STS 권한은 얻지 못한다.
+- **ECS 역할** ([`iam-ecs-roles`](../infra/modules/iam-ecs-roles/main.tf)): apply 역할은 자기 환경 호스트 역할을 EC2에, 태스크 실행 역할을 ECS 태스크에 넘기기만 한다. 태스크 실행 역할은 자기 환경 저장소 pull과 로그 쓰기만 할 수 있다. 운영 역할은 이 역할들을 고치지 못한다.
 - **사람의 운영 역할** ([`iam-operator`](../infra/modules/iam-operator/main.tf)): MFA 세션만 신뢰한다. 프로젝트 인프라 전체를 바꿀 수 있으므로 일상 배포에는 쓰지 않는다.
 - **GitHub 환경 승인** ([`scripts/check-github-settings.sh`](../scripts/check-github-settings.sh)): 1인 저장소라 자기 승인을 허용한다.
 - **적용 workflow** ([`apply-foundation.yml`](../.github/workflows/apply-foundation.yml), [`scripts/tfplan.sh`](../scripts/tfplan.sh)): 승인한 plan과 같은 변경만 적용한다. 삭제·교체는 막으며, destroy 경로는 아직 없다.

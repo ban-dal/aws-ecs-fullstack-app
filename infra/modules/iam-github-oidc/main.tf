@@ -31,7 +31,7 @@ data "aws_iam_policy_document" "boundary" {
 
   statement {
     sid       = "UseProjectRegionServices"
-    actions   = ["ec2:*", "ecr:*"]
+    actions   = ["autoscaling:*", "ec2:*", "ecr:*", "ecs:*", "logs:*"]
     resources = ["*"]
 
     condition {
@@ -39,6 +39,14 @@ data "aws_iam_policy_document" "boundary" {
       variable = "aws:RequestedRegion"
       values   = [var.region]
     }
+  }
+
+  # 서비스에 넘길 수 있는 역할은 bootstrap이 만든 ECS 역할뿐이다. 어느 환경 역할을 어느
+  # 서비스에 넘기는지는 역할 정책이 제한한다.
+  statement {
+    sid       = "PassProjectServiceRoles"
+    actions   = ["iam:PassRole"]
+    resources = var.passable_role_arns
   }
 }
 

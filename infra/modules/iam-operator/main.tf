@@ -159,6 +159,26 @@ data "aws_iam_policy_document" "role" {
     }
   }
 
+  # bootstrap plan이 ECS 역할과 서비스 연결 역할을 refresh하기 위한 읽기 권한이다. GitHub
+  # apply 역할이 이 역할들을 서비스에 넘기므로 운영 역할은 고치지 못하고, 변경은 root로 적용한다.
+  statement {
+    sid = "ReadServiceIdentities"
+    actions = [
+      "iam:GetInstanceProfile",
+      "iam:GetRole",
+      "iam:GetRolePolicy",
+      "iam:ListAttachedRolePolicies",
+      "iam:ListInstanceProfileTags",
+      "iam:ListInstanceProfilesForRole",
+      "iam:ListRolePolicies",
+      "iam:ListRoleTags",
+    ]
+    resources = concat(
+      var.service_identity_arns,
+      ["arn:aws:iam::${var.account_id}:role/aws-service-role/*"],
+    )
+  }
+
   statement {
     sid = "ReadOwnOperatorIdentity"
     actions = [

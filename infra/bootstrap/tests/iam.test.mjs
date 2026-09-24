@@ -49,6 +49,9 @@ for (const [environment, other] of [["preprod", "prod"], ["prod", "preprod"]]) {
   const own = { ...inRegion, "aws:ResourceTag/Environment": environment };
   const foreign = { ...inRegion, "aws:ResourceTag/Environment": other };
   const repository = (name) => `arn:aws:ecr:${region}:${account}:repository/aws-fullstack-lab-${name}-web`;
+  const ecs = `arn:aws:ecs:${region}:${account}`;
+  const logGroup = (name) => `arn:aws:logs:${region}:${account}:log-group:aws-fullstack-lab-${name}-web`;
+  const hostGroup = (name) => `arn:aws:autoscaling:${region}:${account}:autoScalingGroup:00000000-0000-0000-0000-000000000000:autoScalingGroupName/aws-fullstack-lab-${name}-ecs-hosts`;
 
   describe(`${environment} 적용 역할`, () => {
     test(`${environment} 태그를 요청한 VPC 생성은 허용된다`, async () => {
@@ -102,6 +105,66 @@ for (const [environment, other] of [["preprod", "prod"], ["prod", "preprod"]]) {
       assert.equal(await decide({ ...apply, action: "ecr:CreateRepository", resource: repository(environment), context: inRegion }), "allowed");
       assert.equal(await decide({ ...apply, action: "ecr:CreateRepository", resource: repository(other), context: inRegion }), "implicitDeny");
     });
+    test(`${environment} 호스트 역할은 EC2에만 넘길 수 있고 ${other} 호스트 역할은 넘기지 못한다`, async () => {
+      const toEc2 = { ...inRegion, "iam:PassedToService": "ec2.amazonaws.com" };
+      assert.equal(await decide({ ...apply, action: "iam:PassRole", resource: role(`aws-fullstack-lab-${environment}-ecs-host`), context: toEc2 }), "allowed");
+      assert.equal(await decide({ ...apply, action: "iam:PassRole", resource: role(`aws-fullstack-lab-${environment}-ecs-host`), context: { ...inRegion, "iam:PassedToService": "lambda.amazonaws.com" } }), "implicitDeny");
+      assert.equal(await decide({ ...apply, action: "iam:PassRole", resource: role(`aws-fullstack-lab-${other}-ecs-host`), context: toEc2 }), "implicitDeny");
+    });
+    test(`${environment} 태스크 실행 역할은 ECS 태스크에만 넘길 수 있다`, async () => {
+      const executionRole = role(`aws-fullstack-lab-${environment}-ecs-task-execution`);
+      assert.equal(await decide({ ...apply, action: "iam:PassRole", resource: executionRole, context: { ...inRegion, "iam:PassedToService": "ecs-tasks.amazonaws.com" } }), "allowed");
+      assert.equal(await decide({ ...apply, action: "iam:PassRole", resource: executionRole, context: { ...inRegion, "iam:PassedToService": "ec2.amazonaws.com" } }), "implicitDeny");
+    });
+    test("t4g.micro 호스트 실행은 허용되고 다른 인스턴스 유형은 거부된다", async () => {
+      assert.equal(await decide({ ...apply, action: "ec2:RunInstances", resource: `${ec2}:instance/*`, context: { ...inRegion, "ec2:InstanceType": "t4g.micro" } }), "allowed");
+      assert.equal(await decide({ ...apply, action: "ec2:RunInstances", resource: `${ec2}:instance/*`, context: { ...inRegion, "ec2:InstanceType": "m7g.large" } }), "implicitDeny");
+    });
+    test(`${other} 서브넷에서 호스트 실행은 거부된다`, async () => {
+      assert.equal(await decide({ ...apply, action: "ec2:RunInstances", resource: `${ec2}:subnet/subnet-own`, context: own }), "allowed");
+      assert.equal(await decide({ ...apply, action: "ec2:RunInstances", resource: `${ec2}:subnet/subnet-other`, context: foreign }), "implicitDeny");
+    });
+    test("Amazon이 소유하지 않은 AMI로 호스트 실행은 거부된다", async () => {
+      const image = `arn:aws:ec2:${region}::image/ami-0000`;
+      assert.equal(await decide({ ...apply, action: "ec2:RunInstances", resource: image, context: { ...inRegion, "ec2:Owner": "amazon" } }), "allowed");
+      assert.equal(await decide({ ...apply, action: "ec2:RunInstances", resource: image, context: { ...inRegion, "ec2:Owner": "aws-marketplace" } }), "implicitDeny");
+    });
+    test(`${environment} 이름과 태그의 Auto Scaling group 생성만 허용된다`, async () => {
+      assert.equal(await decide({ ...apply, action: "autoscaling:CreateAutoScalingGroup", resource: hostGroup(environment), context: { ...inRegion, "aws:RequestTag/Environment": environment } }), "allowed");
+      assert.equal(await decide({ ...apply, action: "autoscaling:CreateAutoScalingGroup", resource: hostGroup(environment), context: { ...inRegion, "aws:RequestTag/Environment": other } }), "implicitDeny");
+      assert.equal(await decide({ ...apply, action: "autoscaling:UpdateAutoScalingGroup", resource: hostGroup(other), context: inRegion }), "implicitDeny");
+    });
+    test(`${environment} ECS 클러스터 생성은 허용되고 ${other} 이름의 클러스터 생성은 거부된다`, async () => {
+      const tagged = { ...inRegion, "aws:RequestTag/Environment": environment };
+      assert.equal(await decide({ ...apply, action: "ecs:CreateCluster", resource: `${ecs}:cluster/aws-fullstack-lab-${environment}-cluster`, context: tagged }), "allowed");
+      assert.equal(await decide({ ...apply, action: "ecs:CreateCluster", resource: `${ecs}:cluster/aws-fullstack-lab-${other}-cluster`, context: tagged }), "implicitDeny");
+    });
+    test(`${other} 클러스터 안의 서비스 생성은 거부된다`, async () => {
+      const tagged = { ...inRegion, "aws:RequestTag/Environment": environment };
+      assert.equal(await decide({ ...apply, action: "ecs:CreateService", resource: `${ecs}:service/aws-fullstack-lab-${environment}-cluster/aws-fullstack-lab-${environment}-web`, context: tagged }), "allowed");
+      assert.equal(await decide({ ...apply, action: "ecs:CreateService", resource: `${ecs}:service/aws-fullstack-lab-${other}-cluster/aws-fullstack-lab-${environment}-web`, context: tagged }), "implicitDeny");
+    });
+    test(`${other} 태그를 요청한 태스크 정의 등록은 거부된다`, async () => {
+      assert.equal(await decide({ ...apply, action: "ecs:RegisterTaskDefinition", resource: "*", context: { ...inRegion, "aws:RequestTag/Environment": environment } }), "allowed");
+      assert.equal(await decide({ ...apply, action: "ecs:RegisterTaskDefinition", resource: "*", context: { ...inRegion, "aws:RequestTag/Environment": other } }), "implicitDeny");
+    });
+    test(`${environment} 로그 그룹 생성은 허용되고 ${other} 로그 그룹 생성은 거부된다`, async () => {
+      assert.equal(await decide({ ...apply, action: "logs:CreateLogGroup", resource: logGroup(environment), context: inRegion }), "allowed");
+      assert.equal(await decide({ ...apply, action: "logs:CreateLogGroup", resource: logGroup(other), context: inRegion }), "implicitDeny");
+    });
+  });
+
+  describe(`${environment} 태스크 실행 역할`, () => {
+    const execution = { policies: [after[`module.iam_ecs_roles.aws_iam_role_policy.execution["${environment}"]`].policy] };
+
+    test(`${environment} 저장소 pull은 허용되고 ${other} 저장소 pull은 거부된다`, async () => {
+      assert.equal(await decide({ ...execution, action: "ecr:BatchGetImage", resource: repository(environment) }), "allowed");
+      assert.equal(await decide({ ...execution, action: "ecr:BatchGetImage", resource: repository(other) }), "implicitDeny");
+    });
+    test(`${environment} 로그 쓰기는 허용되고 ${other} 로그 쓰기는 거부된다`, async () => {
+      assert.equal(await decide({ ...execution, action: "logs:PutLogEvents", resource: `${logGroup(environment)}:log-stream:web/1` }), "allowed");
+      assert.equal(await decide({ ...execution, action: "logs:PutLogEvents", resource: `${logGroup(other)}:log-stream:web/1` }), "implicitDeny");
+    });
   });
 
   describe(`${environment} 이미지 역할`, () => {
@@ -129,6 +192,10 @@ for (const [environment, other] of [["preprod", "prod"], ["prod", "preprod"]]) {
     test(`${other} state 읽기는 거부된다`, async () => {
       assert.equal(await decide({ ...planRole, action: "s3:GetObject", resource: `${bucket}/${other}/terraform.tfstate`, context: inRegion }), "implicitDeny");
     });
+    test("ECS 조회는 허용되고 ECS 클러스터 생성은 거부된다", async () => {
+      assert.equal(await decide({ ...planRole, action: "ecs:DescribeClusters", resource: "*", context: inRegion }), "allowed");
+      assert.equal(await decide({ ...planRole, action: "ecs:CreateCluster", resource: `arn:aws:ecs:${region}:${account}:cluster/aws-fullstack-lab-${environment}-cluster`, context: { ...inRegion, "aws:RequestTag/Environment": environment } }), "implicitDeny");
+    });
   });
 }
 
@@ -143,6 +210,10 @@ describe("GitHub 역할 boundary", () => {
   });
   test("모든 권한을 가진 역할 정책도 bootstrap state 읽기는 거부된다", async () => {
     assert.equal(await decide({ ...unlimited, action: "s3:GetObject", resource: `${bucket}/bootstrap/terraform.tfstate`, context: inRegion }), "implicitDeny");
+  });
+  test("모든 권한을 가진 역할 정책도 프로젝트 ECS 역할이 아닌 역할은 넘기지 못한다", async () => {
+    assert.equal(await decide({ ...unlimited, action: "iam:PassRole", resource: role("aws-fullstack-lab-preprod-ecs-host"), context: inRegion }), "allowed");
+    assert.equal(await decide({ ...unlimited, action: "iam:PassRole", resource: role("aws-fullstack-lab-bootstrap-operator"), context: inRegion }), "implicitDeny");
   });
   test("모든 권한을 가진 역할 정책도 다른 리전의 EC2 호출은 거부된다", async () => {
     assert.equal(await decide({ ...unlimited, action: "ec2:RunInstances", resource: `${ec2}:instance/*`, context: { "aws:RequestedRegion": "us-east-1" } }), "implicitDeny");
@@ -173,6 +244,11 @@ describe("bootstrap 운영 역할", () => {
   test("boundary 정책 읽기는 허용되고 수정은 거부된다", async () => {
     assert.equal(await decide({ ...op, action: "iam:GetPolicyVersion", resource: boundaryArn }), "allowed");
     assert.equal(await decide({ ...op, action: "iam:CreatePolicyVersion", resource: boundaryArn }), "implicitDeny");
+  });
+  test("ECS 역할 조회는 허용되고 정책 변경은 거부된다", async () => {
+    assert.equal(await decide({ ...op, action: "iam:GetRole", resource: role("aws-fullstack-lab-prod-ecs-host") }), "allowed");
+    assert.equal(await decide({ ...op, action: "iam:AttachRolePolicy", resource: role("aws-fullstack-lab-prod-ecs-host") }), "implicitDeny");
+    assert.equal(await decide({ ...op, action: "iam:PutRolePolicy", resource: role("aws-fullstack-lab-prod-ecs-task-execution") }), "implicitDeny");
   });
   test("자기 역할 정책 수정은 거부된다", async () => {
     assert.equal(await decide({ ...op, action: "iam:PutRolePolicy", resource: role("aws-fullstack-lab-bootstrap-operator") }), "implicitDeny");
