@@ -21,3 +21,19 @@ output "ecs_host_security_group_id" {
 output "ecr_repository_url" {
   value = module.ecr_repository.repository_url
 }
+
+output "ecs_cluster_name" {
+  value = module.ecs_cluster.name
+}
+
+output "ecs_service_name" {
+  value = module.web.service_name
+}
+
+output "ecs_autoscaling_group_name" {
+  value = module.ecs_host.autoscaling_group_name
+}
+
+output "vpn_http_health_url" {
+  value = "http://10.62.0.1:3000/api/health"
+}

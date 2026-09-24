@@ -31,10 +31,11 @@ module "vpc" {
 module "vpc_security_groups" {
   source = "../../modules/vpc-security-groups"
 
-  name_prefix = local.name_prefix
-  vpc_id      = module.vpc.vpc_id
-  vpc_cidr    = module.vpc.cidr_block
-  tags        = local.tags
+  name_prefix      = local.name_prefix
+  vpc_id           = module.vpc.vpc_id
+  vpc_cidr         = module.vpc.cidr_block
+  enable_wireguard = true
+  tags             = local.tags
 }
 
 module "ecr_repository" {
@@ -42,4 +43,39 @@ module "ecr_repository" {
 
   name = "${local.name_prefix}-web"
   tags = local.tags
+}
+
+module "ecs_cluster" {
+  source = "../../modules/ecs-cluster"
+
+  name_prefix = local.name_prefix
+  tags        = local.tags
+}
+
+module "ecs_host" {
+  source = "../../modules/ec2-ecs-host"
+
+  name_prefix      = local.name_prefix
+  cluster_name     = module.ecs_cluster.name
+  public_subnet_id = module.vpc.public_subnet_ids[var.availability_zones[0]]
+  security_group_ids = [
+    module.vpc_security_groups.ecs_host_security_group_id,
+    module.vpc_security_groups.wireguard_security_group_id,
+  ]
+  tags = local.tags
+}
+
+module "web" {
+  source = "../../modules/ecs-preprod-web"
+
+  name_prefix    = local.name_prefix
+  cluster_id     = module.ecs_cluster.id
+  account_id     = var.expected_account_id
+  region         = var.aws_region
+  repository_url = module.ecr_repository.repository_url
+  # 첫 배포에 사용할 이미지. 새 앱 버전은 별도 배포 흐름을 추가할 때 갱신한다.
+  image_tag = "757ff359a5bb83c9b5dab18767d5d80f8e876db4"
+  tags      = local.tags
+
+  depends_on = [module.ecs_host]
 }

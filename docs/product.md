@@ -8,7 +8,7 @@ AI를 활용해 기획, 디자인, 개발, 인프라와 운영을 하나의 저�
 
 | 사용자 | 원하는 일 | 완료 기준 |
 | --- | --- | --- |
-| 방문자 | HTTPS로 앱 열기 | 페이지 로드와 `/api/health` 응답 |
+| 방문자 | prod에서 HTTPS로 앱 열기 | 페이지 로드와 `/api/health` 응답 |
 | 개발자 | 로컬에서 기능 개발 | `pnpm dev`, 타입 검사, 빌드 가능 |
 | 리뷰어 | PR의 앱·인프라 영향 파악 | 빌드, fmt, validate, 환경별 plan 확인 |
 | 운영자 | preprod 확인 후 실험용 prod 승격 | merge 후 preprod, 승인 후 prod 배포 및 종료 가능 |
@@ -21,7 +21,7 @@ AI를 활용해 기획, 디자인, 개발, 인프라와 운영을 하나의 저�
 - Terraform 원격 state, GitHub OIDC 역할, 선택형 비용 Budget, 사람의 비루트 운영 역할.
 - PR의 fmt·validate와 `preprod`·`prod` plan, `main`에서만 실행하는 보호된 환경별 apply.
 - 환경별 VPC, 공개·비공개 서브넷, 보안 그룹, 비공개 ECR.
-- ECS on EC2, ALB, ACM HTTPS, Route 53 DNS, S3 비공개 버킷, Lambda 예제.
+- ECS on EC2, preprod의 VPN 내부 HTTP, prod의 ALB·ACM HTTPS, Route 53 DNS, S3 비공개 버킷, Lambda 예제.
 - 비용이 큰 공개 경로를 스위치로 관리하고, 운영 문서에 생성·종료 절차를 둔다.
 
 ## 현 단계 범위 밖
@@ -32,8 +32,8 @@ AI를 활용해 기획, 디자인, 개발, 인프라와 운영을 하나의 저�
 
 1. 로컬에서 앱을 실행하고 health 응답을 받는다.
 2. PR에서 앱 빌드·Terraform 정적 검사와 두 환경의 plan을 확인한다.
-3. merge 후 preprod에서 새 이미지를 HTTPS로 제공한다.
-4. 승인된 prod 수동 실행으로 같은 커밋을 배포한다.
+3. merge 후 preprod에서 새 이미지를 VPN 내부 HTTP로 제공하고 `/api/health` 응답을 확인한다.
+4. 승인된 prod 수동 실행으로 같은 커밋을 HTTPS로 배포한다.
 5. 운영자가 비용과 리소스를 보고 공개 서비스를 꺼서 비용을 줄일 수 있다.
 
 ## 다음 결정

@@ -251,6 +251,13 @@ resource "aws_iam_role_policy_attachment" "ecs_host" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"
 }
 
+# preprod 호스트의 WireGuard peer 등록과 진단은 SSH 대신 SSM Run Command로 한다.
+# 호스트 역할은 공통이므로 prod 호스트에도 SSM 에이전트 권한이 부여된다.
+resource "aws_iam_role_policy_attachment" "ecs_host_ssm" {
+  role       = aws_iam_role.ecs_host.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
 resource "aws_iam_instance_profile" "ecs_host" {
   name = aws_iam_role.ecs_host.name
   role = aws_iam_role.ecs_host.name
