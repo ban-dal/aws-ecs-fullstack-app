@@ -4,9 +4,11 @@
 
 ```mermaid
 flowchart LR
-  Browser[브라우저] --> DNS[Route 53]
-  DNS --> ALB[ALB / ACM HTTPS]
+  Browser[방문자] --> DNS[Route 53]
+  DNS --> ALB[prod ALB / ACM HTTPS]
   ALB --> ECS[ECS 서비스]
+  Operator[운영자] --> VPN[preprod Client VPN]
+  VPN --> ECS
   ECS --> EC2[공개 서브넷 EC2]
   EC2 --> ECR[ECR 이미지]
   CI[GitHub Actions OIDC] --> TF[Terraform]
@@ -19,9 +21,9 @@ flowchart LR
 ## 선택 이유
 
 - **pnpm workspaces:** 앱과 향후 공유 패키지의 의존성을 하나의 lockfile로 관리한다. Turbo는 필요할 때 작업 그래프와 캐시만 추가하면 된다.
-- **ECS on EC2:** EC2, 컨테이너 스케줄링, ECR을 함께 학습한다. 인스턴스 한 대라 가용 영역 장애를 견디지 못한다.
-- **ALB + ACM + Route 53:** DNS, 인증서 검증, HTTP→HTTPS 전환과 헬스 체크를 실습한다. 부모 도메인 `bandal.dev`는 Vercel에 그대로 두고 `aws.bandal.dev`만 Route 53에 위임한다. preprod는 VPN 안에서 HTTP로만 접속하므로 인증서는 prod ALB에만 쓴다.
-- **NAT 없는 VPC:** 두 환경의 CIDR과 공개·비공개 서브넷을 분리한다. 공개 서브넷도 자동 퍼블릭 IP 할당을 끈다. 후속 ECS 인스턴스에 퍼블릭 IP가 필요하면 비용을 검토하고 명시적으로 할당한다. 호스트 보안 그룹은 ALB에서 오는 동적 호스트 포트만 허용하며 SSH는 열지 않는다. 비공개 서브넷에는 현재 리소스를 놓지 않는다.
+- **ECS on EC2:** EC2, 컨테이너 스케줄링, ECR을 함께 학습한다. preprod는 호스트 한 대만 두므로 가용 영역 장애를 견디지 못한다.
+- **prod ALB + ACM + Route 53:** DNS, 인증서 검증, HTTP→HTTPS 전환과 헬스 체크를 실습한다. 부모 도메인 `bandal.dev`는 Vercel에 그대로 두고 `aws.bandal.dev`만 Route 53에 위임한다. preprod는 VPN 안에서 HTTP로만 접속하므로 ALB와 인증서를 쓰지 않는다.
+- **NAT 없는 VPC:** 두 환경의 CIDR과 공개·비공개 서브넷을 분리한다. 공개 서브넷도 자동 퍼블릭 IP 할당을 끈다. 후속 ECS 인스턴스에 퍼블릭 IP가 필요하면 비용을 검토하고 명시적으로 할당한다. 호스트 보안 그룹은 preprod의 VPN 내부 앱 포트 또는 prod의 ALB 동적 호스트 포트만 허용하며 SSH는 열지 않는다. 비공개 서브넷에는 현재 리소스를 놓지 않는다.
 - **Lambda:** 별도의 `ping` 예제로 서버리스 배포를 연습한다. 공개 엔드포인트는 없다.
 - **S3:** 앱 자산용 비공개 버킷과 Terraform state 버킷을 분리한다.
 
@@ -50,7 +52,7 @@ flowchart LR
   Approval --> Apply[선택한 환경 apply]
 ```
 
-이미지는 main에서 한 번 빌드해 두 환경 저장소에 같은 commit SHA 태그로 올린다. 배포는 이 태그를 고르므로 prod에는 preprod와 같은 커밋이 간다. 첫 배포에서는 이미지가 저장소에 있는 상태에서 ECS 서비스를 시작한다. 서비스는 bridge 네트워크의 동적 호스트 포트를 사용한다. ALB 대상 그룹은 instance 유형이고 EC2 보안 그룹은 ALB 보안 그룹에서 오는 임시 포트만 연다.
+이미지는 main에서 한 번 빌드해 두 환경 저장소에 같은 commit SHA 태그로 올린다. 배포는 이 태그를 고르므로 prod에는 preprod와 같은 커밋이 간다. 첫 배포에서는 이미지가 저장소에 있는 상태에서 ECS 서비스를 시작한다. preprod는 VPN에서 ECS 호스트의 고정 앱 포트로만 들어오고, prod는 bridge 네트워크의 동적 호스트 포트를 사용한다. prod ALB 대상 그룹은 instance 유형이고 prod EC2 보안 그룹은 ALB 보안 그룹에서 오는 임시 포트만 연다.
 
 ## 보안과 한계
 
