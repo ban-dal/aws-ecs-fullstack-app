@@ -1,43 +1,11 @@
-output "aws_account_id" {
-  value = local.account_id
-}
-
-output "state_bucket" {
-  value = module.s3_terraform_state.bucket
-}
-
-output "plan_role_arns" {
-  value = module.iam_github_plan.role_arns
-}
-
-output "apply_role_arns" {
-  value = module.iam_github_apply.role_arns
-}
-
-output "dns_zone_id" {
-  value = module.route53_zone.zone_id
-}
-
-output "dns_name_servers" {
-  value = module.route53_zone.name_servers
-}
-
-output "image_role_arns" {
-  value = module.iam_github_image.role_arns
-}
-
-output "ecs_host_role_arns" {
-  value = module.iam_ecs_roles.host_role_arns
-}
-
-output "ecs_task_execution_role_arns" {
-  value = module.iam_ecs_roles.execution_role_arns
-}
-
-output "operator_user_arn" {
-  value = module.iam_operator.user_arn
-}
-
-output "operator_role_arn" {
-  value = module.iam_operator.role_arn
-}
+output "aws_account_id" { value = local.account_id }
+output "state_bucket" { value = module.s3_terraform_state.bucket }
+output "plan_role_arn" { value = module.iam.plan_role_arn }
+output "apply_role_arn" { value = module.iam.apply_role_arn }
+output "image_role_arn" { value = module.iam.image_role_arn }
+output "ecs_host_role_arn" { value = module.iam.ecs_host_role_arn }
+output "ecs_task_execution_role_arn" { value = module.iam.ecs_task_execution_role_arn }
+output "operator_role_arn" { value = module.iam.operator_role_arn }
+output "operator_user_arn" { value = module.iam.operator_user_arn }
+output "dns_zone_id" { value = module.route53_zone.zone_id }
+output "dns_name_servers" { value = module.route53_zone.name_servers }

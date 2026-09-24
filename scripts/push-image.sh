@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 로컬에 빌드한 이미지를 한 환경의 ECR 저장소에 올린다. Build image workflow가 main에서
-# 환경별 image 역할로 로그인한 뒤 호출한다.
+# 공통 image 역할로 로그인한 뒤 호출한다.
 #
 #   scripts/push-image.sh <preprod|prod> <local-image>
 #

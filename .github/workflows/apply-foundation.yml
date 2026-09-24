@@ -57,15 +57,12 @@ jobs:
           terraform_version: '1.14.0'
           terraform_wrapper: false
       - name: Check required configuration
-        env:
-          AWS_PLAN_ROLE_ARN: ${{ vars.AWS_PLAN_ROLE_ARN }}
         run: |
-          test -n "$AWS_PLAN_ROLE_ARN"
           test -n "$TF_VAR_expected_account_id"
           test -n "$TF_STATE_BUCKET"
       - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
-          role-to-assume: ${{ vars.AWS_PLAN_ROLE_ARN }}
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/aws-fullstack-lab-plan
           aws-region: ${{ env.AWS_REGION }}
       - name: Plan the selected state
         id: plan
@@ -109,15 +106,12 @@ jobs:
           terraform_version: '1.14.0'
           terraform_wrapper: false
       - name: Check required configuration
-        env:
-          AWS_APPLY_ROLE_ARN: ${{ vars.AWS_APPLY_ROLE_ARN }}
         run: |
-          test -n "$AWS_APPLY_ROLE_ARN"
           test -n "$TF_VAR_expected_account_id"
           test -n "$TF_STATE_BUCKET"
       - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
-          role-to-assume: ${{ vars.AWS_APPLY_ROLE_ARN }}
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/aws-fullstack-lab-apply
           aws-region: ${{ env.AWS_REGION }}
       - name: Plan again and compare with the approved plan
         env:

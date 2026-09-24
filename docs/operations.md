@@ -6,10 +6,9 @@
 
 | 대상 | 적용 주체 | 경로 |
 | --- | --- | --- |
-| 서비스 기반 (`infra/environments/<환경>`: VPC·보안 그룹·ECR 저장소) | GitHub 환경별 apply 역할 | [4절](#4-서비스-기반-적용)의 `Apply service foundation` |
-| 앱 이미지 (preprod·prod ECR) | GitHub 환경별 image 역할 | [이미지 빌드](#이미지-빌드)의 `Build image` |
-| bootstrap 중 state 버킷, OIDC 제공자, GitHub 역할의 정책·신뢰 정책 | 운영 역할 `aws-fullstack-lab-bootstrap-operator` | [2절](#2-bootstrap-변경-적용)의 `scripts/bootstrap.sh` |
-| bootstrap 중 운영 사용자·역할, Budget, GitHub 역할 boundary 정책, ECS 호스트·태스크 실행 역할, 서비스 연결 역할, ECR 레지스트리 스캔 설정, 서비스 DNS 영역 | 계정 root 세션 | [2절](#2-bootstrap-변경-적용)의 `scripts/bootstrap.sh` |
+| 서비스 기반 (`infra/environments/<환경>`: VPC·보안 그룹·ECR 저장소) | 두 환경 공통 GitHub apply 역할 | [4절](#4-서비스-기반-적용)의 `Apply service foundation` |
+| 앱 이미지 (preprod·prod ECR) | 공통 GitHub image 역할 | [이미지 빌드](#이미지-빌드)의 `Build image` |
+| bootstrap 전체 | 운영 역할 `aws-fullstack-lab-bootstrap-operator` | [2절](#2-bootstrap-변경-적용)의 `scripts/bootstrap.sh` |
 | 콘솔 비밀번호, MFA 장치 | 사용자 본인 | IAM 콘솔 |
 | `bandal.dev`의 `aws` NS 위임 레코드 | 사용자 본인 | Vercel 대시보드([4절의 도메인 위임](#도메인-위임)) |
 
@@ -50,7 +49,7 @@ aws sts get-caller-identity
 
 ### root (예외)
 
-운영 역할 권한 밖의 bootstrap 변경과 계정 복구에만 쓴다. root에는 MFA가 켜져 있어야 한다. `aws login`은 브라우저에 남아 있는 세션을 고를 수 있으므로, 콘솔의 IAM 사용자 세션을 로그아웃한 뒤 로그인하고 호출 주체가 `:root`로 끝나는지 확인한다. 작업이 끝나면 브라우저와 CLI 세션을 로그아웃한다.
+새 계정의 첫 bootstrap과 운영 역할 고장 시 복구에 쓴다. root에는 MFA가 켜져 있어야 한다. `aws login`은 브라우저에 남아 있는 세션을 고를 수 있으므로, 콘솔의 IAM 사용자 세션을 로그아웃한 뒤 로그인하고 호출 주체가 `:root`로 끝나는지 확인한다. 작업이 끝나면 브라우저와 CLI 세션을 로그아웃한다.
 
 ```bash
 aws configure set region ap-northeast-2 --profile aws-fullstack-bootstrap
@@ -73,6 +72,8 @@ PR merge 후:
 4. GitHub 변수 등 후속 설정이 PR에 적혀 있으면 곧바로 진행하고 `scripts/check-github-settings.sh`로 확인한다.
 5. 스크립트 출력(호출 주체, commit, 변경 요약, 사후 plan)을 해당 PR에 댓글로 남긴다.
 
+환경별 IAM 역할에서 공통 역할로 옮기는 변경을 적용한 뒤에는 GitHub 네 환경의 이전 `AWS_PLAN_ROLE_ARN`·`AWS_APPLY_ROLE_ARN` 변수를 삭제한다. workflow는 계정 ID secret과 공통 역할 이름으로 ARN을 만들기 때문에 이 변수들을 사용하지 않는다. `scripts/check-github-settings.sh`로 삭제와 환경 보호 규칙을 확인한다.
+
 `terraform.tfvars`(계정 ID, 버킷 이름, 알림 이메일 등)는 커밋하지 않는다. 저장 plan은 사용자 임시 디렉터리에만 둔다.
 
 ## 3. GitHub 설정
@@ -94,7 +95,7 @@ PR에서는 두 환경의 plan 요약과 바뀐 인프라 파일이 PR 댓글 �
 3. `*-apply`를 승인한다. 적용 작업은 plan을 다시 만들어, 승인한 plan과 변경 내용이 같을 때만 적용한다. 그사이 인프라가 바뀌었으면 적용하지 않고 실패하므로 workflow를 다시 실행한다. 서비스 기반 모듈 안의 생성·수정만 허용하고 삭제·교체는 막는다([`scripts/tfplan.sh`](../scripts/tfplan.sh)).
 4. 적용 기록은 GitHub Deployments의 `*-apply` 환경에 자동으로 남는다. 계기가 된 PR에 실행 링크를 댓글로 남긴다.
 
-`prod`는 `preprod` 결과와 비용을 검토한 뒤 따로 결정한다. 서비스 기반 plan은 PR이나 이 workflow의 plan 단계에서 확인한다. 운영 역할에는 EC2 읽기 권한이 없어 로컬 `infra/environments/<환경>` plan은 지원하지 않는다.
+`prod`는 `preprod` 결과와 비용을 검토한 뒤 따로 결정한다. 서비스 기반 plan은 PR이나 이 workflow의 plan 단계에서 확인한다. 공통 apply 역할은 IAM으로 환경 간 변경을 막지 않으므로, 선택한 루트와 plan 요약을 승인할 때 확인한다.
 
 기본 AZ는 `ap-northeast-2a`, `ap-northeast-2c`다. 계정에서 쓸 수 없으면 두 환경의 `availability_zones`를 같은 순서로 지정한다. 적용 후 AZ 순서를 바꾸면 서브넷이 교체된다.
 
@@ -150,7 +151,7 @@ PR에서는 두 환경의 plan 요약과 바뀐 인프라 파일이 PR 댓글 �
    ```
 
 5. [README의 GitHub 설정](../README.md#github-설정)대로 GitHub 환경, secret, 변수를 bootstrap output 값으로 채우고 [3절](#3-github-설정)의 스크립트로 확인한다.
-6. IAM 콘솔에서 `aws-fullstack-lab-operator`의 콘솔 접근을 켠다. 사용자는 초기 비밀번호를 바꾸고, 필요하면 콘솔용 패스키와 함께 이름이 `aws-fullstack-lab-operator`인 인증 앱 MFA를 등록한다. [1절](#운영-역할-일상)의 프로필로 `scripts/bootstrap.sh plan`이 변경 없음과 테스트 통과를 보이면 root 세션을 로그아웃한다.
+6. IAM 콘솔에서 `aws-fullstack-lab-operator`의 콘솔 접근을 켠다. 사용자는 초기 비밀번호를 바꾸고, 이름이 `aws-fullstack-lab-operator`인 인증 앱 MFA를 등록한다. [1절](#운영-역할-일상)의 프로필로 `scripts/bootstrap.sh plan`이 변경 없음과 테스트 통과를 보이면 root 세션을 로그아웃한다.
 7. [4절의 도메인 위임](#도메인-위임)을 하고, [4절](#4-서비스-기반-적용)로 `preprod`부터 적용한다.
 
 ## 6. 비용 관리

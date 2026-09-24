@@ -7,7 +7,7 @@ Next.js 앱과 AWS 인프라를 한 저장소에서 관리하는 프로젝트다
 | 경로 | 용도 |
 | --- | --- |
 | `apps/web` | Next.js 앱과 `/api/health` |
-| `infra/bootstrap` | 계정·IAM 루트: state 버킷, GitHub OIDC 역할과 boundary, ECS 호스트·태스크 실행 역할, 비용 Budget, 사람의 운영 역할, ECR 스캔 |
+| `infra/bootstrap` | 계정·IAM 루트: state 버킷, GitHub OIDC 역할 3개, 공통 ECS 역할 2개, 비용 Budget, 사람의 운영 역할, ECR 스캔 |
 | `infra/environments/<환경>` | preprod·prod 서비스 루트: VPC, 보안 그룹, ECR 저장소 |
 | `infra/modules` | AWS 서비스 이름으로 나눈 모듈. 구조와 규칙은 [infra/README.md](infra/README.md) |
 | `.github/workflows/ci.yml` | PR과 main의 앱 타입 검사·빌드 |
@@ -38,11 +38,9 @@ GitHub Actions는 AWS 장기 키 없이 OIDC 역할로 AWS에 접근한다. 그�
 | Secret | 저장소 | `AWS_ACCOUNT_ID` | AWS 계정 ID(12자리). bootstrap output `aws_account_id` |
 | Secret | 저장소 | `TF_STATE_BUCKET` | Terraform state 버킷 이름. bootstrap output `state_bucket` |
 | Variable | 저장소 | `AWS_REGION` | `ap-northeast-2` (state 버킷과 서비스 리소스의 리전) |
-| Variable | 환경 `preprod-plan`, `prod-plan` | `AWS_PLAN_ROLE_ARN` | bootstrap output `plan_role_arns`의 해당 환경 값 |
-| Variable | 환경 `preprod-apply`, `prod-apply` | `AWS_APPLY_ROLE_ARN` | bootstrap output `apply_role_arns`의 해당 환경 값 |
 
 - 계정 ID와 버킷 이름을 변수가 아닌 secret으로 두는 이유는 공개 Actions 로그에서 가리기 위해서다. 같은 이름의 저장소 변수는 두지 않는다.
-- 이미지 push 역할은 환경을 쓰지 않으므로 변수가 없다. `image.yml`이 계정 ID secret과 역할 이름으로 ARN을 만든다.
+- plan·apply·image workflow는 계정 ID secret과 공통 역할 이름으로 ARN을 만든다. 이전 환경별 `AWS_PLAN_ROLE_ARN`·`AWS_APPLY_ROLE_ARN` 변수는 bootstrap 변경 적용 후 삭제한다.
 - 네 환경에는 `ban-dal` 필수 승인자를 두고, `*-apply` 환경은 `main` 브랜치에서만 배포하게 한다. 환경 보호 규칙은 변수보다 먼저 만든다.
 - secret은 명령줄 인자로 넘기지 말고, 프롬프트에 붙여 넣거나 로컬 파일에서 읽어 넣는다. 셸 기록과 로그에 값을 남기지 않기 위해서다.
 
@@ -52,10 +50,6 @@ gh secret set AWS_ACCOUNT_ID --repo ban-dal/aws-ecs-fullstack-app
 
 ```bash
 terraform -chdir=infra/bootstrap output -raw state_bucket | gh secret set TF_STATE_BUCKET --repo ban-dal/aws-ecs-fullstack-app
-```
-
-```bash
-gh variable set AWS_PLAN_ROLE_ARN --env preprod-plan --repo ban-dal/aws-ecs-fullstack-app --body "$(terraform -chdir=infra/bootstrap output -json plan_role_arns | jq -r .preprod)"
 ```
 
 설정한 뒤 `scripts/check-github-settings.sh`로 위 표와 보호 규칙이 맞는지 확인한다. 이 스크립트가 기대값의 기준이며, 표와 다르면 스크립트를 기준으로 표를 고친다.
