@@ -2,14 +2,14 @@
 # GitHub 환경과 변수가 AWS 역할 설계와 맞는지 확인한다.
 # 읽기 전용이다. 어긋난 항목을 출력하고 0이 아닌 코드로 끝나며, 아무것도 바꾸지 않는다.
 #
-# 저장소 관리자가 한 명이므로 모든 환경은 `ban-dal`의 승인을 요구하고 자기 승인을
-# 허용한다(prevent_self_review=false). 승인은 독립 검토가 아니라 사람이 누르는 확인
-# 버튼이다. PR plan 승인은 리뷰 전 브랜치 코드에 AWS 읽기 자격을 줘도 되는지를
-# 정하고, apply 승인만 배포 결정이다. 두 번째 리뷰어가 생기면 prevent_self_review를
-# 켠다.
+# 사람의 승인은 배포 결정인 `*-apply`에만 둔다. 저장소 관리자가 한 명이므로 `ban-dal`의
+# 승인을 요구하고 자기 승인을 허용한다(prevent_self_review=false). `*-apply`는 `main`
+# 브랜치에서만 배포한다.
 #
-# 환경 보호 규칙을 변수보다 먼저 만든다. 변수만 있으면 PR plan이 승인 없이 실행된다.
-# fork PR은 AWS 자격을 받지 않는다.
+# `*-plan`에는 승인 규칙을 두지 않는다. 같은 저장소 브랜치를 push할 수 있는 사람이
+# 관리자뿐이라, PR plan 승인은 관리자가 자기 코드에 읽기 자격을 주는 확인일 뿐이다.
+# fork PR은 AWS 자격을 받지 않는다. 쓰기 권한자를 추가하면 plan 역할이 state를
+# 읽을 수 있으므로 `*-plan`의 필수 승인자와 prevent_self_review를 다시 켠다.
 set -euo pipefail
 
 repo="${GITHUB_REPOSITORY:-ban-dal/aws-ecs-fullstack-app}"
@@ -59,10 +59,12 @@ for environment in preprod prod; do
   for kind in plan apply; do
     name="$environment-$kind"
     rules="$(gh api "repos/$repo/environments/$name" -q '.protection_rules[] | select(.type == "required_reviewers")')"
-    expect "$name requires $reviewer" "$(jq -r '[.reviewers[].reviewer.login] | join(",")' <<<"$rules")" "$reviewer"
-    expect "$name allows self-approval" "$(jq -r '.prevent_self_review' <<<"$rules")" false
-
-    if [[ "$kind" == apply ]]; then
+    reviewers="$(jq -r '[.reviewers[].reviewer.login] | join(",")' <<<"$rules")"
+    if [[ "$kind" == plan ]]; then
+      expect "$name has no required reviewers" "$reviewers" ""
+    else
+      expect "$name requires $reviewer" "$reviewers" "$reviewer"
+      expect "$name allows self-approval" "$(jq -r '.prevent_self_review' <<<"$rules")" false
       branches="$(gh api "repos/$repo/environments/$name/deployment-branch-policies" -q '[.branch_policies[].name] | join(",")')"
       expect "$name deploys from main only" "$branches" main
     fi

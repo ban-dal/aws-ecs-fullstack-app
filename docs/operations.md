@@ -91,7 +91,7 @@ scripts/check-github-settings.sh
 PR에서는 두 환경의 plan 요약과 바뀐 인프라 파일이 PR 댓글 하나에 올라오고, push할 때마다 갱신된다. 적용 workflow가 막는 변경이 있으면 그 댓글에 표시된다.
 
 1. GitHub Actions에서 `Apply service foundation`을 `main`의 환경 하나로 실행한다.
-2. `*-plan`을 승인한다. 실행 화면의 요약에서 변경과 검사 결과를 확인한다.
+2. plan 작업은 승인 없이 실행된다. 실행 화면의 요약에서 변경과 검사 결과를 확인한다.
 3. `*-apply`를 승인한다. 적용 작업은 plan을 다시 만들어, 승인한 plan과 변경 내용이 같을 때만 적용한다. 그사이 인프라가 바뀌었으면 적용하지 않고 실패하므로 workflow를 다시 실행한다. 서비스 기반 모듈 안의 생성·수정만 허용하고 삭제·교체는 막는다([`scripts/tfplan.sh`](../scripts/tfplan.sh)).
 4. 적용 기록은 GitHub Deployments의 `*-apply` 환경에 자동으로 남는다. 계기가 된 PR에 실행 링크를 댓글로 남긴다.
 
