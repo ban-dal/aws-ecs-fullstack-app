@@ -20,6 +20,8 @@ permissions:
   contents: read
 
 # shell을 지정해야 -eo pipefail로 실행되어 파이프 중간의 실패가 가려지지 않는다.
+# 계정 ID와 state 버킷 이름은 공개 로그에 남지 않도록 secret으로 받는다. secret 값은
+# job 시작부터 로그 전체에서 가려지므로 역할 ARN이나 backend 설정 안에 섞여도 드러나지 않는다.
 defaults:
   run:
     shell: bash
@@ -41,9 +43,9 @@ jobs:
       fingerprint: ${{ steps.plan.outputs.fingerprint }}
     env:
       AWS_REGION: ${{ vars.AWS_REGION || 'ap-northeast-2' }}
-      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
       TARGET_ENV: ${{ inputs.environment }}
-      TF_VAR_expected_account_id: ${{ vars.AWS_ACCOUNT_ID }}
+      TF_VAR_expected_account_id: ${{ secrets.AWS_ACCOUNT_ID }}
       TF_IN_AUTOMATION: 'true'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -93,9 +95,9 @@ jobs:
       id-token: write
     env:
       AWS_REGION: ${{ vars.AWS_REGION || 'ap-northeast-2' }}
-      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
       TARGET_ENV: ${{ inputs.environment }}
-      TF_VAR_expected_account_id: ${{ vars.AWS_ACCOUNT_ID }}
+      TF_VAR_expected_account_id: ${{ secrets.AWS_ACCOUNT_ID }}
       TF_IN_AUTOMATION: 'true'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

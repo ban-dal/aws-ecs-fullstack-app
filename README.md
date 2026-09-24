@@ -28,6 +28,36 @@ pnpm dev
 
 앱은 `http://localhost:3000`, 상태 확인은 `http://localhost:3000/api/health`에서 볼 수 있다. `pnpm typecheck`와 `pnpm build`로 검사한다. Docker 이미지는 저장소 루트에서 `docker build -f apps/web/Dockerfile -t aws-fullstack-web .`로 만든다.
 
+## GitHub 설정
+
+GitHub Actions는 AWS 장기 키 없이 OIDC 역할로 AWS에 접근한다. 그래서 AWS 액세스 키 secret은 두지 않는다. 필요한 값은 아래뿐이고, 모두 bootstrap을 적용한 뒤에 채운다.
+
+| 종류 | 위치 | 이름 | 값 |
+| --- | --- | --- | --- |
+| Secret | 저장소 | `AWS_ACCOUNT_ID` | AWS 계정 ID(12자리). bootstrap output `aws_account_id` |
+| Secret | 저장소 | `TF_STATE_BUCKET` | Terraform state 버킷 이름. bootstrap output `state_bucket` |
+| Variable | 저장소 | `AWS_REGION` | `ap-northeast-2` (state 버킷과 서비스 리소스의 리전) |
+| Variable | 환경 `preprod-plan`, `prod-plan` | `AWS_PLAN_ROLE_ARN` | bootstrap output `plan_role_arns`의 해당 환경 값 |
+| Variable | 환경 `preprod-apply`, `prod-apply` | `AWS_APPLY_ROLE_ARN` | bootstrap output `apply_role_arns`의 해당 환경 값 |
+
+- 계정 ID와 버킷 이름을 변수가 아닌 secret으로 두는 이유는 공개 Actions 로그에서 가리기 위해서다. 같은 이름의 저장소 변수는 두지 않는다.
+- 네 환경에는 `ban-dal` 필수 승인자를 두고, `*-apply` 환경은 `main` 브랜치에서만 배포하게 한다. 환경 보호 규칙은 변수보다 먼저 만든다.
+- secret은 명령줄 인자로 넘기지 말고, 프롬프트에 붙여 넣거나 로컬 파일에서 읽어 넣는다. 셸 기록과 로그에 값을 남기지 않기 위해서다.
+
+```bash
+gh secret set AWS_ACCOUNT_ID --repo ban-dal/aws-ecs-fullstack-app
+```
+
+```bash
+terraform -chdir=infra/bootstrap output -raw state_bucket | gh secret set TF_STATE_BUCKET --repo ban-dal/aws-ecs-fullstack-app
+```
+
+```bash
+gh variable set AWS_PLAN_ROLE_ARN --env preprod-plan --repo ban-dal/aws-ecs-fullstack-app --body "$(terraform -chdir=infra/bootstrap output -json plan_role_arns | jq -r .preprod)"
+```
+
+설정한 뒤 `scripts/check-github-settings.sh`로 위 표와 보호 규칙이 맞는지 확인한다. 이 스크립트가 기대값의 기준이며, 표와 다르면 스크립트를 기준으로 표를 고친다.
+
 ## 적용 상태 확인
 
 상태를 문서에 따로 적지 않는다. 다음 두 곳이 기준이다.
@@ -38,8 +68,7 @@ pnpm dev
 ## 다음 단계
 
 1. `prod` 서비스 기반 적용(`Apply service foundation` 실행).
-2. `infra/bootstrap/moved.tf`, `infra/environments/preprod/moved.tf` 삭제. bootstrap과 preprod에 적용한 뒤에는 아무 일도 하지 않으므로 다음 인프라 PR에 함께 넣는다.
-3. 이미지 빌드·push, ECS on EC2, ALB·ACM·Route 53(공개 스위치 `enable_public_app` 기본 `false`), 배포 흐름과 종료 절차, S3·Lambda 예제를 비용 선택지와 함께 추가한다.
+2. 이미지 빌드·push, ECS on EC2, ALB·ACM·Route 53(공개 스위치 `enable_public_app` 기본 `false`), 배포 흐름과 종료 절차, S3·Lambda 예제를 비용 선택지와 함께 추가한다.
 
 ## 문서
 

@@ -28,9 +28,9 @@ aws sts get-caller-identity --profile aws-fullstack-operator-login
 
 aws configure set credential_process 'aws configure export-credentials --profile aws-fullstack-operator-login --format process' --profile aws-fullstack-operator-source
 aws configure set region ap-northeast-2 --profile aws-fullstack-operator-source
-aws configure set role_arn arn:aws:iam::065768154598:role/aws-fullstack-lab-bootstrap-operator --profile aws-fullstack-operator
+aws configure set role_arn arn:aws:iam::<account-id>:role/aws-fullstack-lab-bootstrap-operator --profile aws-fullstack-operator
 aws configure set source_profile aws-fullstack-operator-source --profile aws-fullstack-operator
-aws configure set mfa_serial arn:aws:iam::065768154598:mfa/aws-fullstack-lab-operator --profile aws-fullstack-operator
+aws configure set mfa_serial arn:aws:iam::<account-id>:mfa/aws-fullstack-lab-operator --profile aws-fullstack-operator
 aws configure set region ap-northeast-2 --profile aws-fullstack-operator
 aws configure set credential_process 'aws configure export-credentials --profile aws-fullstack-operator --format process' --profile aws-fullstack-operator-terraform
 aws configure set region ap-northeast-2 --profile aws-fullstack-operator-terraform
@@ -75,13 +75,13 @@ PR merge 후:
 
 ## 3. GitHub 설정
 
-`scripts/check-github-settings.sh`가 기대하는 설정의 기준이다. 환경별 보호 규칙, `*-apply`의 `main` 브랜치 제한, 저장소 변수(`TF_STATE_BUCKET`, `AWS_ACCOUNT_ID`, `AWS_REGION`), 환경별 역할 ARN 변수를 확인하고, 어긋난 항목을 `FAIL`로 출력한다. 설정은 바꾸지 않는다. 역할 ARN은 bootstrap output(`plan_role_arns`, `apply_role_arns`)과 같아야 한다.
+넣어야 할 secret·변수와 값의 출처는 [README의 GitHub 설정](../README.md#github-설정)에 있다. `scripts/check-github-settings.sh`가 기대하는 설정의 기준이며, 어긋난 항목을 `FAIL`로 출력하고 설정은 바꾸지 않는다.
 
 ```bash
 scripts/check-github-settings.sh
 ```
 
-`FAIL` 항목은 저장소의 Settings → Environments 또는 `gh api`로 맞춘다. 환경 보호 규칙을 변수보다 먼저 만든다.
+`FAIL` 항목은 저장소의 Settings → Secrets and variables, Settings → Environments 또는 `gh` 명령으로 맞춘다.
 
 ## 4. 서비스 기반 적용
 
@@ -120,7 +120,7 @@ PR에서는 두 환경의 plan 요약과 바뀐 인프라 파일이 PR 댓글 �
    terraform -chdir=infra/bootstrap output
    ```
 
-5. GitHub 환경과 변수를 output 값으로 설정하고 [3절](#3-github-설정)의 스크립트로 확인한다. 다른 계정이면 계정 ID와 GitHub 사용자 ID를 새 값으로 바꾼다.
+5. [README의 GitHub 설정](../README.md#github-설정)대로 GitHub 환경, secret, 변수를 bootstrap output 값으로 채우고 [3절](#3-github-설정)의 스크립트로 확인한다.
 6. IAM 콘솔에서 `aws-fullstack-lab-operator`의 콘솔 접근을 켠다. 사용자는 초기 비밀번호를 바꾸고, 필요하면 콘솔용 패스키와 함께 이름이 `aws-fullstack-lab-operator`인 인증 앱 MFA를 등록한다. [1절](#운영-역할-일상)의 프로필로 `scripts/bootstrap.sh plan`이 변경 없음과 테스트 통과를 보이면 root 세션을 로그아웃한다.
 7. [4절](#4-서비스-기반-적용)로 `preprod`부터 적용한다.
 

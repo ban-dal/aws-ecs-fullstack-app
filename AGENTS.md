@@ -10,6 +10,7 @@
 - 현재는 pnpm workspaces만 사용한다. 빌드 단계가 복잡해질 때 Turbo를 추가한다.
 - AWS 리소스나 비용을 늘리는 변경은 예상 비용, 종료 방법, 무료 플랜 영향, PR plan 결과를 설명한다. `enable_public_app`의 기본값은 `false`로 유지한다.
 - Terraform state, `.tfvars`, 계정 비밀, AWS 자격 증명은 커밋하지 않는다. GitHub Actions는 OIDC를 사용한다.
+- 저장소는 공개다. AWS 계정 ID, state 버킷 이름, 개인 연락처는 코드·문서·PR 본문·PR 댓글에 쓰지 않고 `<account-id>`, `<state-bucket>`처럼 가린다. 스크립트 출력을 붙여 넣을 때도 가려졌는지 확인한다.
 - Terraform을 구현할 때 `preprod`와 `prod`는 서로 다른 S3 state key와 리소스 이름을 유지한다. 한 환경 변경이 다른 환경에 영향을 주는지 검토한다.
 - 서비스 리소스의 `terraform apply`는 PR 리뷰와 merge 이후 GitHub 환경 보호 규칙을 통과해 실행한다. `infra/bootstrap`은 PR merge 후 `scripts/bootstrap.sh`로 로컬에서 적용하고, `apply` 전에 사용자 승인을 받는다. bootstrap 적용과 로컬 긴급 변경의 결과는 해당 PR 댓글에 남기고 코드에 반영한다.
 
