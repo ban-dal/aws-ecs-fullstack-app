@@ -18,3 +18,8 @@ variable "enable_wireguard" {
   type    = bool
   default = false
 }
+
+variable "enable_client_vpn" {
+  type    = bool
+  default = false
+}

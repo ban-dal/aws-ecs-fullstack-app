@@ -56,6 +56,7 @@ jobs:
       TARGET_ENV: ${{ matrix.environment }}
       TF_IN_AUTOMATION: 'true'
       TF_VAR_expected_account_id: ${{ secrets.AWS_ACCOUNT_ID }}
+      TF_VAR_client_vpn_server_certificate_arn: ${{ secrets.CLIENT_VPN_SERVER_CERTIFICATE_ARN }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -68,6 +69,7 @@ jobs:
         run: |
           test -n "$TF_VAR_expected_account_id"
           test -n "$TF_STATE_BUCKET"
+          if [[ "$TARGET_ENV" == preprod ]]; then test -n "$TF_VAR_client_vpn_server_certificate_arn"; fi
       - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           role-to-assume: ${{ vars.AWS_PLAN_ROLE_ARN || format('arn:aws:iam::{0}:role/aws-fullstack-lab-plan', secrets.AWS_ACCOUNT_ID) }}

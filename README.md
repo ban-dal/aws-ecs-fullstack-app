@@ -37,6 +37,7 @@ GitHub Actions는 AWS 장기 키 없이 OIDC 역할로 AWS에 접근한다. 그�
 | --- | --- | --- | --- |
 | Secret | 저장소 | `AWS_ACCOUNT_ID` | AWS 계정 ID(12자리). bootstrap output `aws_account_id` |
 | Secret | 저장소 | `TF_STATE_BUCKET` | Terraform state 버킷 이름. bootstrap output `state_bucket` |
+| Secret | 저장소 | `CLIENT_VPN_SERVER_CERTIFICATE_ARN` | `scripts/preprod-client-vpn.sh prepare`가 ACM에 가져온 preprod 서버 인증서 ARN |
 | Variable | 저장소 | `AWS_REGION` | `ap-northeast-2` (state 버킷과 서비스 리소스의 리전) |
 
 - 계정 ID와 버킷 이름을 변수가 아닌 secret으로 두는 이유는 공개 Actions 로그에서 가리기 위해서다. 같은 이름의 저장소 변수는 두지 않는다.
@@ -63,7 +64,7 @@ terraform -chdir=infra/bootstrap output -raw state_bucket | gh secret set TF_STA
 
 ## 다음 단계
 
-preprod의 VPN 내부 HTTP 접속을 검증한 뒤, prod의 ALB·ACM·Route 53 공개 HTTPS와 이미지 승격 흐름을 추가한다. S3·Lambda 예제는 비용을 따로 검토한다.
+preprod의 AWS Client VPN 인증서 접속을 검증한 뒤 기존 WireGuard를 제거한다. 이후 prod의 ALB·ACM·Route 53 공개 HTTPS와 이미지 승격 흐름을 추가한다. S3·Lambda 예제는 비용을 따로 검토한다.
 
 ## 문서
 

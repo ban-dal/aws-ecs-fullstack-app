@@ -7,7 +7,7 @@ flowchart LR
   Browser[방문자] --> DNS[Route 53]
   DNS --> ALB[prod ALB / ACM HTTPS]
   ALB --> ECS[ECS 서비스]
-  Operator[운영자] --> VPN[preprod WireGuard]
+  Operator[운영자] --> VPN[preprod AWS Client VPN]
   VPN --> EC2
   ECS --> EC2[공개 서브넷 EC2]
   EC2 --> ECR[ECR 이미지]
@@ -22,8 +22,8 @@ flowchart LR
 
 - **pnpm workspaces:** 앱과 향후 공유 패키지의 의존성을 하나의 lockfile로 관리한다. Turbo는 필요할 때 작업 그래프와 캐시만 추가하면 된다.
 - **ECS on EC2:** EC2, 컨테이너 스케줄링, ECR을 함께 학습한다. preprod는 호스트 한 대만 두므로 가용 영역 장애를 견디지 못한다.
-- **prod ALB + ACM + Route 53:** DNS, 인증서 검증, HTTP→HTTPS 전환과 헬스 체크를 실습한다. 부모 도메인 `bandal.dev`는 Vercel에 그대로 두고 `aws.bandal.dev`만 Route 53에 위임한다. preprod는 VPN 안에서 HTTP로만 접속하므로 ALB와 인증서를 쓰지 않는다.
-- **NAT 없는 VPC:** 두 환경의 CIDR과 공개·비공개 서브넷을 분리한다. 공개 서브넷도 자동 퍼블릭 IP 할당을 끈다. preprod 호스트는 ECR·SSM 접근과 VPN 수신을 위해 퍼블릭 IP 한 개를 명시적으로 받는다. 보안 그룹은 WireGuard UDP만 공개하고 앱 HTTP와 SSH는 열지 않는다. 비공개 서브넷에는 현재 리소스를 놓지 않는다.
+- **prod ALB + ACM + Route 53:** DNS, 인증서 검증, HTTP→HTTPS 전환과 헬스 체크를 실습한다. 부모 도메인 `bandal.dev`는 Vercel에 그대로 두고 `aws.bandal.dev`만 Route 53에 위임한다. preprod는 VPN 안에서 HTTP로만 접속하므로 웹용 ALB와 HTTPS 인증서를 쓰지 않는다.
+- **NAT 없는 VPC:** 두 환경의 CIDR과 공개·비공개 서브넷을 분리한다. 공개 서브넷도 자동 퍼블릭 IP 할당을 끈다. preprod 호스트는 ECR·SSM 접근을 위해 퍼블릭 IP 한 개를 명시적으로 받는다. 앱 HTTP와 SSH는 인터넷에 열지 않는다. 비공개 서브넷에는 현재 리소스를 놓지 않는다.
 - **Lambda:** 별도의 `ping` 예제로 서버리스 배포를 연습한다. 공개 엔드포인트는 없다.
 - **S3:** 앱 자산용 비공개 버킷과 Terraform state 버킷을 분리한다.
 
@@ -31,7 +31,7 @@ flowchart LR
 
 `preprod`와 `prod`는 AI 성능 실험과 학습을 위한 환경이다. 같은 모듈을 쓰되 루트는 `infra/environments/preprod`, `infra/environments/prod`로 나눈다. 두 환경은 값뿐 아니라 구성이 달라지므로, 각 루트의 `main.tf`가 그 환경의 구성을 그대로 보여 주게 하기 위해서다. VPC CIDR은 각각 `10.60.0.0/16`, `10.61.0.0/16`이고 리소스 이름과 `preprod/terraform.tfstate`, `prod/terraform.tfstate` 키를 분리한다.
 
-- **preprod:** 고가용성이 필요 없다. ALB 없이 ECS 호스트 한 대를 두고, 같은 호스트의 WireGuard에 등록한 기기만 터널 주소 `10.62.0.1:3000`으로 HTTP 앱에 접속한다. 공개 IPv4에는 VPN UDP 포트만 연다. AWS Client VPN의 별도 엔드포인트 시간당 요금을 피하지만 호스트가 교체되면 VPN peer를 다시 등록해야 한다.
+- **preprod:** 고가용성이 필요 없다. ALB 없이 ECS 호스트 한 대를 두고, AWS Client VPN의 인증서로 접속한 기기만 호스트의 사설 IP와 HTTP 3000 포트에 접근한다. 관리형 VPN 엔드포인트는 연결자가 없어도 시간당 과금된다. 접속 검증 전까지 기존 WireGuard를 임시로 유지하며, 검증 후 공개 UDP 규칙과 호스트 설정을 제거한다.
 - **prod:** 두 AZ에 호스트를 두고 ALB와 ACM 인증서로 공개 HTTPS를 제공한다. ALB는 서브넷이 두 AZ에 있어야 하므로 두 환경 모두 VPC 서브넷은 두 AZ에 둔다.
 
 두 환경은 한 AWS 계정을 공유하므로 IAM과 계정 수준 장애는 분리되지 않는다. 계정을 나누려면 AWS Organizations가 필요한데, 현재 Free plan 계정이 가입하면 크레딧이 즉시 만료되고 유료 플랜으로 전환된다. 실제 사용자 데이터를 다루거나 Free plan이 끝나거나 환경 간 IAM 격리가 필요해지면 계정 분리를 다시 검토한다. 콘솔은 계정 하나에서 리소스 이름과 `Environment` 태그로 환경을 구분한다.

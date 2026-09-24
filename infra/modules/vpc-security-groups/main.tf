@@ -74,3 +74,34 @@ resource "aws_vpc_security_group_egress_rule" "wireguard" {
   ip_protocol       = "-1"
   cidr_ipv4         = "0.0.0.0/0"
 }
+
+# AWS Client VPN ENI와 ECS 호스트 사이에는 앱 포트만 허용한다. 인증서로 VPN에
+# 들어와도 VPC의 다른 서비스 포트에는 접근할 수 없게 한다.
+resource "aws_security_group" "client_vpn" {
+  count       = var.enable_client_vpn ? 1 : 0
+  name        = "${var.name_prefix}-client-vpn"
+  description = "Preprod Client VPN target network"
+  vpc_id      = var.vpc_id
+
+  tags = merge(var.tags, { Name = "${var.name_prefix}-client-vpn-sg" })
+}
+
+resource "aws_vpc_security_group_egress_rule" "client_vpn_to_web" {
+  count                        = var.enable_client_vpn ? 1 : 0
+  security_group_id            = aws_security_group.client_vpn[0].id
+  description                  = "Only the preprod web host port"
+  ip_protocol                  = "tcp"
+  from_port                    = 3000
+  to_port                      = 3000
+  referenced_security_group_id = aws_security_group.ecs_host.id
+}
+
+resource "aws_vpc_security_group_ingress_rule" "ecs_host_from_client_vpn" {
+  count                        = var.enable_client_vpn ? 1 : 0
+  security_group_id            = aws_security_group.ecs_host.id
+  description                  = "HTTP from authenticated Client VPN sessions"
+  ip_protocol                  = "tcp"
+  from_port                    = 3000
+  to_port                      = 3000
+  referenced_security_group_id = aws_security_group.client_vpn[0].id
+}
