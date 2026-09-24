@@ -47,7 +47,7 @@ repo_variable() {
 
 # 계정 ID와 state 버킷 이름은 공개 로그에서 가려지도록 secret으로 둔다. 같은 이름의
 # 변수가 남아 있으면 값이 로그에 드러나므로 없어야 한다.
-for name in AWS_ACCOUNT_ID TF_STATE_BUCKET; do
+for name in AWS_ACCOUNT_ID TF_STATE_BUCKET CLIENT_VPN_SERVER_CERTIFICATE_ARN; do
   expect "repository secret $name exists" "$(exists "repos/$repo/actions/secrets/$name")" yes
   expect "repository variable $name is absent" "$(repo_variable "$name")" ""
 done

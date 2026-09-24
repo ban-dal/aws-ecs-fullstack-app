@@ -103,25 +103,18 @@ PR에서는 두 환경의 plan 요약과 바뀐 인프라 파일이 PR 댓글 �
 
 `Build image`(`.github/workflows/image.yml`)는 앱 파일이 바뀐 PR에서 arm64 이미지를 빌드하고, 컨테이너를 띄워 `/api/health`를 확인한다. main에 merge되면 같은 이미지를 commit SHA 태그로 preprod·prod 저장소에 올리고, 실행 요약에 태그·digest·취약점 스캔 결과 개수를 남긴다. 저장소 태그는 덮어쓸 수 없으므로, 같은 태그가 있으면 건너뛴다. 앱 파일 변경 없이 다시 올리려면 main에서 workflow를 수동 실행한다.
 
-### preprod 앱과 VPN 접속
+### preprod 앱과 AWS Client VPN 접속
 
-ECS 호스트의 WireGuard는 AWS Client VPN 엔드포인트를 만들지 않는다. 공개 IPv4에는 UDP 51820만 열고 앱 HTTP 3000과 SSH는 열지 않는다. 첫 배포는 ECR에 이미 push된 이미지 태그를 사용한다.
+첫 preprod 앱 이미지는 ECR에 이미 push된 태그를 사용한다. AWS Client VPN은 인증서로 접속하고, 앱 HTTP 3000 포트는 VPN 보안 그룹에서만 열어 둔다. 관리형 엔드포인트는 접속자가 없어도 과금되므로 [AWS VPN 요금](https://aws.amazon.com/vpn/pricing/)을 확인한다.
 
-1. ECS/IAM 변경을 포함한 PR을 merge한 뒤 [2절](#2-bootstrap-변경-적용)로 bootstrap을 먼저 적용한다. 그다음 [4절](#4-서비스-기반-적용)의 `Apply service foundation`을 **preprod**로 한 번 실행한다. prod는 적용하지 않는다.
-2. 로컬에 WireGuard 앱과 `wg` 명령을 설치한다. [1절](#운영-역할-일상)의 MFA 운영 역할 프로필을 활성화한 뒤 아래 명령을 실행한다. 스크립트는 클라이언트 개인 키를 `~/.config/aws-fullstack-lab/preprod/`에만 저장하고, SSM에는 공개 키만 보낸다. 키 파일과 `.conf`를 저장소나 메시지에 올리지 않는다.
+1. [운영 역할](#운영-역할-일상)을 활성화하고 `scripts/preprod-client-vpn.sh prepare`를 실행한다. 로컬 CA·서버·클라이언트 인증서를 만들고 서버 인증서만 ACM에 가져오며, ARN을 GitHub repository secret에 저장한다. `~/.config/aws-fullstack-lab/preprod/client-vpn/`의 개인 키와 인증서는 저장소·메시지에 올리지 않는다. CA 키를 잃으면 새 기기 인증서를 발급할 수 없으므로 안전하게 백업한다.
+2. PR의 preprod/prod plan을 검토하고 merge한 뒤 [서비스 적용 절차](#4-서비스-기반-적용)로 **preprod**만 적용한다. prod는 적용하지 않는다. 필요하면 [GitHub 설정 검사](#3-github-설정)를 실행한다.
+3. `scripts/preprod-client-vpn.sh config`를 실행해 `preprod.ovpn`을 만든다. AWS VPN Client에 이 파일을 가져와 연결한다. `.ovpn`에도 클라이언트 개인 키가 있으므로 공유하지 않는다.
+4. `scripts/preprod-client-vpn.sh check`를 실행한다. ECS desired/running이 `1/1`, rollout이 `COMPLETED`, health 응답이 `{"status":"ok","environment":"preprod"}`인지 확인하고 스크립트가 출력한 사설 IP 주소의 페이지를 브라우저에서 연다. 호스트가 교체되면 사설 IP가 바뀌므로 `check`에서 현재 주소를 다시 확인한다.
 
-   ```bash
-   export AWS_PROFILE=aws-fullstack-operator-terraform
-   scripts/preprod-access.sh enroll
-   ```
+기존 WireGuard는 AWS Client VPN 접속 검증이 끝날 때까지 임시로 유지한다. 그동안의 `scripts/preprod-access.sh enroll|revoke|check`는 WireGuard 전용이다. 관리형 VPN 접속을 확인한 다음 별도 plan에서 공개 UDP 규칙과 호스트의 WireGuard 구성을 제거한다.
 
-3. 출력된 `preprod.conf`를 WireGuard 앱에 가져와 연결한다. `http://10.62.0.1:3000` 페이지가 열리고 아래 명령에서 `runningCount`가 1, health 응답의 `status`가 `ok`, `environment`가 `preprod`인지 확인한다.
-
-   ```bash
-   scripts/preprod-access.sh check
-   ```
-
-호스트가 교체되거나 중지 후 다시 시작되면 공개 IP·서버 키·peer가 바뀔 수 있다. 기존 터널을 끊고 `enroll`을 다시 실행해 `.conf`를 다시 가져온다. 기기 분실 등으로 접속을 끊어야 하면 `scripts/preprod-access.sh revoke`로 서버의 peer를 제거한다.
+장기간 사용하지 않을 때는 VPN 앱에서 연결을 끊고 `scripts/preprod-client-vpn.sh suspend`로 대상 서브넷 연결을 해제한다. 연결 시간 과금은 해제 완료 후 멈추지만 Terraform state와 차이가 생긴다. 다시 사용할 때는 preprod 적용 workflow의 새 plan에서 서브넷 연결 재생성을 확인하고 적용한다. ECS 호스트도 함께 중지하려면 `scripts/preprod-access.sh stop`을 사용한다.
 
 ### 도메인 위임
 

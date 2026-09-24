@@ -13,6 +13,12 @@ variable "expected_account_id" {
   }
 }
 
+variable "client_vpn_server_certificate_arn" {
+  type        = string
+  description = "로컬 CA에서 발급해 ACM에 등록한 preprod Client VPN 서버 인증서 ARN"
+  sensitive   = true
+}
+
 variable "availability_zones" {
   type        = list(string)
   description = "서로 다른 두 가용 영역. 계정에서 사용 가능한 AZ를 확인하고 지정한다."

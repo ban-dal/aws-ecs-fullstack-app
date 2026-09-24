@@ -31,11 +31,24 @@ module "vpc" {
 module "vpc_security_groups" {
   source = "../../modules/vpc-security-groups"
 
-  name_prefix      = local.name_prefix
-  vpc_id           = module.vpc.vpc_id
-  vpc_cidr         = module.vpc.cidr_block
-  enable_wireguard = true
-  tags             = local.tags
+  name_prefix       = local.name_prefix
+  vpc_id            = module.vpc.vpc_id
+  vpc_cidr          = module.vpc.cidr_block
+  enable_wireguard  = true
+  enable_client_vpn = true
+  tags              = local.tags
+}
+
+module "client_vpn" {
+  source = "../../modules/ec2-client-vpn"
+
+  name_prefix            = local.name_prefix
+  vpc_id                 = module.vpc.vpc_id
+  vpc_cidr               = module.vpc.cidr_block
+  subnet_id              = module.vpc.public_subnet_ids[var.availability_zones[0]]
+  security_group_id      = module.vpc_security_groups.client_vpn_security_group_id
+  server_certificate_arn = var.client_vpn_server_certificate_arn
+  tags                   = local.tags
 }
 
 module "ecr_repository" {
