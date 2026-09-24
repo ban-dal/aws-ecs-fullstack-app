@@ -19,6 +19,7 @@ infra/
 | [`iam-github-plan`](modules/iam-github-plan/main.tf) | 환경별 PR plan 역할 | bootstrap |
 | [`iam-github-apply`](modules/iam-github-apply/main.tf) | 환경별 서비스 적용 역할 | bootstrap |
 | [`iam-operator`](modules/iam-operator/main.tf) | 사람의 IAM 사용자와 MFA 역할 | bootstrap |
+| [`route53-zone`](modules/route53-zone/main.tf) | 서비스 도메인 `aws.bandal.dev` 영역과 CAA | bootstrap |
 | [`s3-terraform-state`](modules/s3-terraform-state/main.tf) | Terraform state 버킷 | bootstrap |
 | [`vpc`](modules/vpc/main.tf) | VPC, 서브넷, Internet Gateway, 라우팅 | preprod, prod |
 | [`vpc-security-groups`](modules/vpc-security-groups/main.tf) | ALB·ECS 호스트 보안 그룹과 규칙 | preprod, prod |

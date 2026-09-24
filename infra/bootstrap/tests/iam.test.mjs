@@ -161,6 +161,11 @@ describe("bootstrap 운영 역할", () => {
     assert.equal(await decide({ ...op, action: "ecr:GetRegistryScanningConfiguration", resource: "*" }), "allowed");
     assert.equal(await decide({ ...op, action: "ecr:PutRegistryScanningConfiguration", resource: "*" }), "implicitDeny");
   });
+  test("DNS 영역과 레코드 읽기는 허용되고 레코드 변경은 거부된다", async () => {
+    const zone = "arn:aws:route53:::hostedzone/Z0000000000000";
+    assert.equal(await decide({ ...op, action: "route53:ListResourceRecordSets", resource: zone }), "allowed");
+    assert.equal(await decide({ ...op, action: "route53:ChangeResourceRecordSets", resource: zone }), "implicitDeny");
+  });
   test("정책 시뮬레이터 호출은 허용된다", async () => {
     assert.equal(await decide({ ...op, action: "iam:SimulateCustomPolicy", resource: "*" }), "allowed");
   });
