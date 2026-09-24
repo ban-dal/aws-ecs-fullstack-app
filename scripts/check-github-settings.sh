@@ -52,15 +52,9 @@ for name in AWS_ACCOUNT_ID TF_STATE_BUCKET; do
   expect "repository variable $name is absent" "$(repo_variable "$name")" ""
 done
 expect "repository variable AWS_REGION is set" "$([[ -n "$(repo_variable AWS_REGION)" ]] && echo set)" set
-# plan 역할은 환경별이다. 저장소 수준 값이 있으면 환경 값이 빠졌을 때 조용히
-# 그 자리를 대신한다.
-expect "repository variable AWS_PLAN_ROLE_ARN is absent" "$(repo_variable AWS_PLAN_ROLE_ARN)" ""
-
-# secret 값은 읽을 수 없으므로, 역할 ARN의 계정은 로컬 bootstrap 변수와 비교한다.
-root="$(git rev-parse --show-toplevel)"
-account="$(awk -F'"' '/^expected_account_id[[:space:]]*=/ {print $2}' "$root/infra/bootstrap/terraform.tfvars" 2>/dev/null || true)"
-[[ -n "$account" ]] || { echo "expected_account_id is missing in infra/bootstrap/terraform.tfvars" >&2; exit 1; }
-
+for variable in AWS_PLAN_ROLE_ARN AWS_APPLY_ROLE_ARN; do
+  expect "unused repository variable $variable is absent" "$(repo_variable "$variable")" ""
+done
 for environment in preprod prod; do
   for kind in plan apply; do
     name="$environment-$kind"
@@ -71,12 +65,10 @@ for environment in preprod prod; do
     if [[ "$kind" == apply ]]; then
       branches="$(gh api "repos/$repo/environments/$name/deployment-branch-policies" -q '[.branch_policies[].name] | join(",")')"
       expect "$name deploys from main only" "$branches" main
-      variable=AWS_APPLY_ROLE_ARN
-    else
-      variable=AWS_PLAN_ROLE_ARN
     fi
-    value="$(variable_value "repos/$repo/environments/$name/variables/$variable")"
-    expect "$name $variable" "$value" "arn:aws:iam::$account:role/aws-fullstack-lab-$name"
+    for variable in AWS_PLAN_ROLE_ARN AWS_APPLY_ROLE_ARN; do
+      expect "unused $name variable $variable is absent" "$(variable_value "repos/$repo/environments/$name/variables/$variable")" ""
+    done
   done
 done
 

@@ -29,16 +29,19 @@ variable "github_repository_subject" {
   }
 }
 
-variable "budget_alert_email" {
+variable "alert_email" {
   type        = string
   default     = null
-  description = "월간 비용 알림 주소. null이면 Budget을 생성하지 않는다."
+  description = "월간 비용과 root 로그인 알림 주소. null이면 Budget과 root 로그인 알림을 만들지 않는다."
   nullable    = true
+  sensitive   = true
 }
 
+# preprod ECS 호스트 한 대(월 약 $14)와 DNS·ECR을 포함한 한도다. prod 호스트와 ALB를
+# 켜는 PR에서 다시 올린다.
 variable "monthly_budget_usd" {
   type    = number
-  default = 5
+  default = 20
 
   validation {
     condition     = var.monthly_budget_usd > 0

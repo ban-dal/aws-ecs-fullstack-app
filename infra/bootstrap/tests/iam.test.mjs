@@ -1,11 +1,5 @@
-// bootstrap IAM 권한의 의도를 실행 가능한 형태로 적은 테스트다. 각 사례는 저장된
-// bootstrap plan의 정책을 IAM 정책 시뮬레이터로 판정한다. 의도한 경계를 깨는 정책
-// 변경은 적용되기 전에 여기서 실패한다.
-//
-// scripts/bootstrap.sh plan에서 실행되며, 직접 실행할 수도 있다.
-//   PLAN_JSON=<terraform show -json 출력> node --test infra/bootstrap/tests/*.test.mjs
-// iam:SimulateCustomPolicy를 호출할 수 있는 AWS 자격 증명이 필요하다.
-
+// 저장된 bootstrap plan의 핵심 IAM 경계를 AWS 정책 시뮬레이터로 검증한다.
+// PLAN_JSON=<terraform show -json 출력> node --test infra/bootstrap/tests/iam.test.mjs
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -13,180 +7,75 @@ import { describe, test } from "node:test";
 import { promisify } from "node:util";
 
 const run = promisify(execFile);
-
 const plan = JSON.parse(readFileSync(process.env.PLAN_JSON, "utf8"));
-const after = Object.fromEntries(plan.resource_changes.map((change) => [change.address, change.change.after]));
-const variable = (name) => plan.variables[name].value;
+const after = Object.fromEntries(plan.resource_changes.map(({ address, change }) => [address, change.after]));
+const account = plan.variables.expected_account_id.value;
+const region = plan.variables.aws_region.value;
+const bucket = `arn:aws:s3:::${plan.variables.state_bucket_name.value}`;
+const role = (name) => `arn:aws:iam::${account}:role/aws-fullstack-lab-${name}`;
+const repository = (environment) => `arn:aws:ecr:${region}:${account}:repository/aws-fullstack-lab-${environment}-web`;
+const policy = (address) => after[address].policy;
+const planPolicy = policy('module.iam.aws_iam_role_policy.github["plan"]');
+const applyPolicy = policy('module.iam.aws_iam_role_policy.github["apply"]');
+const imagePolicy = policy('module.iam.aws_iam_role_policy.github["image"]');
+const executionPolicy = policy("module.iam.aws_iam_role_policy.ecs_execution");
 
-const account = variable("expected_account_id");
-const region = variable("aws_region");
-const bucket = `arn:aws:s3:::${variable("state_bucket_name")}`;
-const ec2 = `arn:aws:ec2:${region}:${account}`;
-const role = (name) => `arn:aws:iam::${account}:role/${name}`;
-const boundaryArn = `arn:aws:iam::${account}:policy/${after["module.iam_github_oidc.aws_iam_policy.boundary"].name}`;
-
-const boundary = after["module.iam_github_oidc.aws_iam_policy.boundary"].policy;
-const operator = after["module.iam_operator.aws_iam_role_policy.this"].policy;
-const admin = JSON.stringify({ Version: "2012-10-17", Statement: [{ Effect: "Allow", Action: "*", Resource: "*" }] });
-const inRegion = { "aws:RequestedRegion": region };
-
-async function decide({ policies, boundaries = [], action, resource, context = {} }) {
+async function decide(document, action, resource, context = {}) {
   const entries = Object.entries(context).map(([key, value]) => ({
     ContextKeyName: key,
-    ContextKeyValues: Array.isArray(value) ? value : [value],
-    ContextKeyType: Array.isArray(value) ? "stringList" : "string",
+    ContextKeyValues: [String(value)],
+    ContextKeyType: "string",
   }));
-  const args = ["iam", "simulate-custom-policy", "--output", "json", "--policy-input-list", ...policies];
-  if (boundaries.length > 0) args.push("--permissions-boundary-policy-input-list", ...boundaries);
-  args.push("--action-names", action, "--resource-arns", resource, "--context-entries", JSON.stringify(entries));
-  const { stdout } = await run("aws", args);
+  const { stdout } = await run("aws", [
+    "iam", "simulate-custom-policy", "--output", "json", "--policy-input-list", document,
+    "--action-names", action, "--resource-arns", resource,
+    "--context-entries", JSON.stringify(entries),
+  ]);
   return JSON.parse(stdout).EvaluationResults[0].EvalDecision;
 }
 
-for (const [environment, other] of [["preprod", "prod"], ["prod", "preprod"]]) {
-  const apply = { policies: [after[`module.iam_github_apply.aws_iam_role_policy.this["${environment}"]`].policy], boundaries: [boundary] };
-  const planRole = { policies: [after[`module.iam_github_plan.aws_iam_role_policy.this["${environment}"]`].policy], boundaries: [boundary] };
-  const own = { ...inRegion, "aws:ResourceTag/Environment": environment };
-  const foreign = { ...inRegion, "aws:ResourceTag/Environment": other };
-  const repository = (name) => `arn:aws:ecr:${region}:${account}:repository/aws-fullstack-lab-${name}-web`;
+for (const environment of ["preprod", "prod"]) {
+  describe(`${environment} 공통 역할`, () => {
+    test(`${environment} plan은 state 읽기를 허용하고 본문 쓰기를 거부한다`, async () => {
+      const state = `${bucket}/${environment}/terraform.tfstate`;
+      assert.equal(await decide(planPolicy, "s3:GetObject", state), "allowed");
+      assert.equal(await decide(planPolicy, "s3:PutObject", state), "implicitDeny");
+    });
 
-  describe(`${environment} 적용 역할`, () => {
-    test(`${environment} 태그를 요청한 VPC 생성은 허용된다`, async () => {
-      assert.equal(await decide({ ...apply, action: "ec2:CreateVpc", resource: `${ec2}:vpc/*`, context: { ...inRegion, "aws:RequestTag/Environment": environment } }), "allowed");
+    test(`${environment} apply는 state 쓰기와 서비스 변경을 허용한다`, async () => {
+      assert.equal(await decide(applyPolicy, "s3:PutObject", `${bucket}/${environment}/terraform.tfstate`), "allowed");
+      assert.equal(await decide(applyPolicy, "ec2:CreateVpc", `arn:aws:ec2:${region}:${account}:vpc/*`), "allowed");
     });
-    test(`${other} 태그를 요청한 VPC 생성은 거부된다`, async () => {
-      assert.equal(await decide({ ...apply, action: "ec2:CreateVpc", resource: `${ec2}:vpc/*`, context: { ...inRegion, "aws:RequestTag/Environment": other } }), "implicitDeny");
-    });
-    test(`${environment} VPC 안의 서브넷 생성은 허용된다`, async () => {
-      assert.equal(await decide({ ...apply, action: "ec2:CreateSubnet", resource: `${ec2}:vpc/vpc-own`, context: { ...own, "aws:RequestTag/Environment": environment } }), "allowed");
-    });
-    test(`${other} VPC 안의 서브넷 생성은 자기 태그를 요청해도 거부된다`, async () => {
-      assert.equal(await decide({ ...apply, action: "ec2:CreateSubnet", resource: `${ec2}:vpc/vpc-other`, context: { ...foreign, "aws:RequestTag/Environment": environment } }), "implicitDeny");
-    });
-    test("생성 시점의 태그 지정은 자기 환경 값일 때만 허용된다", async () => {
-      const context = { ...inRegion, "ec2:CreateAction": "CreateVpc" };
-      assert.equal(await decide({ ...apply, action: "ec2:CreateTags", resource: `${ec2}:vpc/*`, context: { ...context, "aws:RequestTag/Environment": environment } }), "allowed");
-      assert.equal(await decide({ ...apply, action: "ec2:CreateTags", resource: `${ec2}:vpc/*`, context: { ...context, "aws:RequestTag/Environment": other } }), "implicitDeny");
-    });
-    test(`${environment} VPC 삭제는 허용되고 ${other} VPC 삭제는 거부된다`, async () => {
-      assert.equal(await decide({ ...apply, action: "ec2:DeleteVpc", resource: `${ec2}:vpc/vpc-own`, context: own }), "allowed");
-      assert.equal(await decide({ ...apply, action: "ec2:DeleteVpc", resource: `${ec2}:vpc/vpc-other`, context: foreign }), "implicitDeny");
-    });
-    test(`${other} 보안 그룹의 규칙 추가는 거부된다`, async () => {
-      assert.equal(await decide({ ...apply, action: "ec2:AuthorizeSecurityGroupIngress", resource: `${ec2}:security-group/sg-own`, context: own }), "allowed");
-      assert.equal(await decide({ ...apply, action: "ec2:AuthorizeSecurityGroupIngress", resource: `${ec2}:security-group/sg-other`, context: foreign }), "implicitDeny");
-    });
-    test("태그 없는 보안 그룹 규칙 리소스는 허용된다", async () => {
-      assert.equal(await decide({ ...apply, action: "ec2:AuthorizeSecurityGroupIngress", resource: `${ec2}:security-group-rule/sgr-new`, context: inRegion }), "allowed");
-    });
-    test(`자기 리소스의 Environment 태그를 ${other}로 바꾸는 요청은 거부된다`, async () => {
-      assert.equal(await decide({ ...apply, action: "ec2:CreateTags", resource: `${ec2}:subnet/subnet-own`, context: { ...own, "aws:TagKeys": ["Name"], "aws:RequestTag/Name": "web" } }), "allowed");
-      assert.equal(await decide({ ...apply, action: "ec2:CreateTags", resource: `${ec2}:subnet/subnet-own`, context: { ...own, "aws:RequestTag/Environment": other } }), "implicitDeny");
-    });
-    test(`${other} 리소스에 ${environment} 태그를 붙이는 요청은 거부된다`, async () => {
-      assert.equal(await decide({ ...apply, action: "ec2:CreateTags", resource: `${ec2}:subnet/subnet-other`, context: { ...foreign, "aws:RequestTag/Environment": environment } }), "implicitDeny");
-    });
-    test("Environment 태그 제거는 거부되고 다른 태그 제거는 허용된다", async () => {
-      assert.equal(await decide({ ...apply, action: "ec2:DeleteTags", resource: `${ec2}:subnet/subnet-own`, context: { ...own, "aws:TagKeys": ["Name"] } }), "allowed");
-      assert.equal(await decide({ ...apply, action: "ec2:DeleteTags", resource: `${ec2}:subnet/subnet-own`, context: { ...own, "aws:TagKeys": ["Environment"] } }), "implicitDeny");
-    });
-    test("다른 리전의 조회는 거부된다", async () => {
-      assert.equal(await decide({ ...apply, action: "ec2:DescribeVpcs", resource: "*", context: inRegion }), "allowed");
-      assert.equal(await decide({ ...apply, action: "ec2:DescribeVpcs", resource: "*", context: { "aws:RequestedRegion": "us-east-1" } }), "implicitDeny");
-    });
-    test(`${other} state 쓰기는 거부된다`, async () => {
-      assert.equal(await decide({ ...apply, action: "s3:PutObject", resource: `${bucket}/${environment}/terraform.tfstate`, context: inRegion }), "allowed");
-      assert.equal(await decide({ ...apply, action: "s3:PutObject", resource: `${bucket}/${other}/terraform.tfstate`, context: inRegion }), "implicitDeny");
-    });
-    test(`${other} ECR 저장소 생성은 거부된다`, async () => {
-      assert.equal(await decide({ ...apply, action: "ecr:CreateRepository", resource: repository(environment), context: inRegion }), "allowed");
-      assert.equal(await decide({ ...apply, action: "ecr:CreateRepository", resource: repository(other), context: inRegion }), "implicitDeny");
-    });
-  });
 
-  describe(`${environment} 이미지 역할`, () => {
-    const image = { policies: [after[`module.iam_github_image.aws_iam_role_policy.this["${environment}"]`].policy], boundaries: [boundary] };
+    test(`${environment} apply는 저장소 관리와 공통 ECS 역할 전달을 허용한다`, async () => {
+      assert.equal(await decide(applyPolicy, "ecr:CreateRepository", repository(environment)), "allowed");
+      assert.equal(await decide(applyPolicy, "iam:PassRole", role("ecs-host"), { "iam:PassedToService": "ec2.amazonaws.com" }), "allowed");
+      assert.equal(await decide(applyPolicy, "iam:PassRole", role("ecs-host"), { "iam:PassedToService": "ecs-tasks.amazonaws.com" }), "implicitDeny");
+    });
 
-    test(`${environment} 저장소에 이미지 push는 허용되고 ${other} 저장소 push는 거부된다`, async () => {
-      assert.equal(await decide({ ...image, action: "ecr:PutImage", resource: repository(environment), context: inRegion }), "allowed");
-      assert.equal(await decide({ ...image, action: "ecr:PutImage", resource: repository(other), context: inRegion }), "implicitDeny");
+    test(`${environment} image는 이미지 push를 허용하고 저장소 삭제를 거부한다`, async () => {
+      assert.equal(await decide(imagePolicy, "ecr:PutImage", repository(environment)), "allowed");
+      assert.equal(await decide(imagePolicy, "ecr:DeleteRepository", repository(environment)), "implicitDeny");
     });
-    test("레지스트리 로그인은 이 리전에서만 허용된다", async () => {
-      assert.equal(await decide({ ...image, action: "ecr:GetAuthorizationToken", resource: "*", context: inRegion }), "allowed");
-      assert.equal(await decide({ ...image, action: "ecr:GetAuthorizationToken", resource: "*", context: { "aws:RequestedRegion": "us-east-1" } }), "implicitDeny");
-    });
-    test("저장소 삭제와 이미지 삭제는 거부된다", async () => {
-      assert.equal(await decide({ ...image, action: "ecr:DeleteRepository", resource: repository(environment), context: inRegion }), "implicitDeny");
-      assert.equal(await decide({ ...image, action: "ecr:BatchDeleteImage", resource: repository(environment), context: inRegion }), "implicitDeny");
-    });
-  });
 
-  describe(`${environment} plan 역할`, () => {
-    test(`${environment} state 읽기만 허용되고 쓰기는 거부된다`, async () => {
-      assert.equal(await decide({ ...planRole, action: "s3:GetObject", resource: `${bucket}/${environment}/terraform.tfstate`, context: inRegion }), "allowed");
-      assert.equal(await decide({ ...planRole, action: "s3:PutObject", resource: `${bucket}/${environment}/terraform.tfstate`, context: inRegion }), "implicitDeny");
-    });
-    test(`${other} state 읽기는 거부된다`, async () => {
-      assert.equal(await decide({ ...planRole, action: "s3:GetObject", resource: `${bucket}/${other}/terraform.tfstate`, context: inRegion }), "implicitDeny");
+    test(`${environment} 실행 역할은 이미지 pull을 허용한다`, async () => {
+      assert.equal(await decide(executionPolicy, "ecr:BatchGetImage", repository(environment)), "allowed");
     });
   });
 }
 
-describe("GitHub 역할 boundary", () => {
-  const unlimited = { policies: [admin], boundaries: [boundary] };
+describe("공통 IAM 경계", () => {
+  test("GitHub 역할은 bootstrap state 읽기와 IAM 역할 생성을 거부한다", async () => {
+    for (const document of [planPolicy, applyPolicy, imagePolicy]) {
+      assert.equal(await decide(document, "s3:GetObject", `${bucket}/bootstrap/terraform.tfstate`), "implicitDeny");
+      assert.equal(await decide(document, "iam:CreateRole", role("extra")), "implicitDeny");
+    }
+  });
 
-  test("모든 권한을 가진 역할 정책도 IAM 역할 생성은 거부된다", async () => {
-    assert.equal(await decide({ ...unlimited, action: "iam:CreateRole", resource: role("anything"), context: inRegion }), "implicitDeny");
-  });
-  test("모든 권한을 가진 역할 정책도 운영 역할 수임은 거부된다", async () => {
-    assert.equal(await decide({ ...unlimited, action: "sts:AssumeRole", resource: role("aws-fullstack-lab-bootstrap-operator"), context: inRegion }), "implicitDeny");
-  });
-  test("모든 권한을 가진 역할 정책도 bootstrap state 읽기는 거부된다", async () => {
-    assert.equal(await decide({ ...unlimited, action: "s3:GetObject", resource: `${bucket}/bootstrap/terraform.tfstate`, context: inRegion }), "implicitDeny");
-  });
-  test("모든 권한을 가진 역할 정책도 다른 리전의 EC2 호출은 거부된다", async () => {
-    assert.equal(await decide({ ...unlimited, action: "ec2:RunInstances", resource: `${ec2}:instance/*`, context: { "aws:RequestedRegion": "us-east-1" } }), "implicitDeny");
-  });
-});
-
-describe("bootstrap 운영 역할", () => {
-  const op = { policies: [operator] };
-  const applyRole = role("aws-fullstack-lab-preprod-apply");
-
-  test("GitHub 역할 정책 수정은 허용된다", async () => {
-    assert.equal(await decide({ ...op, action: "iam:PutRolePolicy", resource: applyRole }), "allowed");
-  });
-  test("이미지 역할의 boundary 제거는 명시적으로 거부된다", async () => {
-    assert.equal(await decide({ ...op, action: "iam:DeleteRolePermissionsBoundary", resource: role("aws-fullstack-lab-prod-image") }), "explicitDeny");
-  });
-  test("GitHub 역할의 boundary 제거는 명시적으로 거부된다", async () => {
-    assert.equal(await decide({ ...op, action: "iam:DeleteRolePermissionsBoundary", resource: applyRole }), "explicitDeny");
-  });
-  test("다른 정책으로 boundary를 교체하는 요청은 명시적으로 거부된다", async () => {
-    const context = { "iam:PermissionsBoundary": `arn:aws:iam::${account}:policy/other` };
-    assert.equal(await decide({ ...op, action: "iam:PutRolePermissionsBoundary", resource: role("aws-fullstack-lab-prod-plan"), context }), "explicitDeny");
-  });
-  test("boundary 없는 GitHub 역할 재생성은 명시적으로 거부되고 같은 boundary로는 허용된다", async () => {
-    assert.equal(await decide({ ...op, action: "iam:CreateRole", resource: applyRole }), "explicitDeny");
-    assert.equal(await decide({ ...op, action: "iam:CreateRole", resource: applyRole, context: { "iam:PermissionsBoundary": boundaryArn } }), "allowed");
-  });
-  test("boundary 정책 읽기는 허용되고 수정은 거부된다", async () => {
-    assert.equal(await decide({ ...op, action: "iam:GetPolicyVersion", resource: boundaryArn }), "allowed");
-    assert.equal(await decide({ ...op, action: "iam:CreatePolicyVersion", resource: boundaryArn }), "implicitDeny");
-  });
-  test("자기 역할 정책 수정은 거부된다", async () => {
-    assert.equal(await decide({ ...op, action: "iam:PutRolePolicy", resource: role("aws-fullstack-lab-bootstrap-operator") }), "implicitDeny");
-  });
-  test("레지스트리 스캔 설정 읽기는 허용되고 변경은 거부된다", async () => {
-    assert.equal(await decide({ ...op, action: "ecr:GetRegistryScanningConfiguration", resource: "*" }), "allowed");
-    assert.equal(await decide({ ...op, action: "ecr:PutRegistryScanningConfiguration", resource: "*" }), "implicitDeny");
-  });
-  test("DNS 영역과 레코드 읽기는 허용되고 레코드 변경은 거부된다", async () => {
-    const zone = "arn:aws:route53:::hostedzone/Z0000000000000";
-    assert.equal(await decide({ ...op, action: "route53:ListResourceRecordSets", resource: zone }), "allowed");
-    assert.equal(await decide({ ...op, action: "route53:ChangeResourceRecordSets", resource: zone }), "implicitDeny");
-  });
-  test("정책 시뮬레이터 호출은 허용된다", async () => {
-    assert.equal(await decide({ ...op, action: "iam:SimulateCustomPolicy", resource: "*" }), "allowed");
+  test("운영 역할 신뢰 정책은 사용자와 MFA를 요구한다", () => {
+    const trust = JSON.parse(after["module.iam.aws_iam_role.operator"].assume_role_policy);
+    const statement = trust.Statement[0];
+    assert.equal(statement.Principal.AWS, `arn:aws:iam::${account}:user/aws-fullstack-lab-operator`);
+    assert.equal(statement.Condition.Bool["aws:MultiFactorAuthPresent"], "true");
   });
 });

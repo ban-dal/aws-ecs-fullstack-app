@@ -17,14 +17,13 @@ on:
       - scripts/push-image.sh
   push:
     branches: [main]
+    # workflow·push 스크립트 변경만으로는 이미지를 올리지 않는다. 필요하면 main에서 수동 실행한다.
     paths:
       - apps/**
       - package.json
       - pnpm-lock.yaml
       - pnpm-workspace.yaml
       - .npmrc
-      - .github/workflows/image.yml
-      - scripts/push-image.sh
   workflow_dispatch:
 
 permissions:
@@ -72,20 +71,15 @@ jobs:
           exit 1
 
       # 아래는 main에서만 실행된다. image 역할은 main 브랜치 토큰만 신뢰한다.
-      # 역할 이름은 infra/modules/iam-github-image와 같아야 한다.
+      # 역할 이름은 infra/modules/iam과 같아야 한다.
       - if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/aws-fullstack-lab-preprod-image
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/aws-fullstack-lab-image
           aws-region: ${{ env.AWS_REGION }}
       - if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         name: Push to preprod
         run: scripts/push-image.sh preprod "web:$IMAGE_TAG"
-      - if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
-        with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/aws-fullstack-lab-prod-image
-          aws-region: ${{ env.AWS_REGION }}
       - if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         name: Push to prod
         run: scripts/push-image.sh prod "web:$IMAGE_TAG"
