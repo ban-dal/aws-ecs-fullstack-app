@@ -19,7 +19,7 @@ infra/
 | [`ec2-client-vpn`](modules/ec2-client-vpn/main.tf) | 인증서 기반 AWS Client VPN 엔드포인트와 단일 서브넷 연결 | preprod |
 | [`ecs-cluster`](modules/ecs-cluster/main.tf) | ECS 클러스터 | preprod |
 | [`ecs-preprod-web`](modules/ecs-preprod-web/main.tf) | 앱 태스크·서비스·로그 | preprod |
-| [`iam`](modules/iam/main.tf) | GitHub OIDC, 공통 plan·apply·image 역할, 사람의 MFA 운영 역할, 공통 ECS 역할, 서비스 연결 역할 | bootstrap |
+| [`iam`](modules/iam/main.tf) | GitHub OIDC, 공통 plan·apply·image 역할, 사람의 MFA 운영 역할, 공통 ECS 역할, Client VPN 서비스 연결 역할 | bootstrap |
 | [`route53-zone`](modules/route53-zone/main.tf) | 서비스 도메인 `aws.bandal.dev` 영역과 CAA | bootstrap |
 | [`s3-terraform-state`](modules/s3-terraform-state/main.tf) | Terraform state 버킷 | bootstrap |
 | [`vpc`](modules/vpc/main.tf) | VPC, 서브넷, Internet Gateway, 라우팅 | preprod, prod |
