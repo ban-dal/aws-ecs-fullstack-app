@@ -27,11 +27,6 @@ variable "state_bucket_arn" {
   type = string
 }
 
-variable "read_actions" {
-  type        = list(string)
-  description = "서비스 기반을 refresh하는 데 필요한 읽기 액션"
-}
-
 variable "repository_arns" {
   type        = map(string)
   description = "환경별 ECR 저장소 ARN"
@@ -45,9 +40,4 @@ variable "host_role_arns" {
 variable "execution_role_arns" {
   type        = map(string)
   description = "환경별 ECS 태스크 실행 역할 ARN. ECS 태스크에만 넘길 수 있다."
-}
-
-variable "log_group_arns" {
-  type        = map(string)
-  description = "환경별 CloudWatch 로그 그룹 ARN 패턴"
 }

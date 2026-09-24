@@ -28,8 +28,9 @@ locals {
     environment => "arn:aws:logs:${var.aws_region}:${local.account_id}:log-group:aws-fullstack-lab-${environment}-*"
   }
 
-  # 조회는 리소스를 바꾸지 않으므로 서비스 단위 Describe·List로 준다. provider 버전마다
-  # refresh에 쓰는 조회 API가 달라, 액션을 하나씩 적으면 빠질 때마다 root 적용이 필요하다.
+  # plan 역할의 조회 권한이다. 조회는 리소스를 바꾸지 않으므로 서비스 단위 Describe·List로
+  # 준다. provider 버전마다 refresh에 쓰는 조회 API가 달라, 액션을 하나씩 적으면 빠질 때마다
+  # root 적용이 필요하다. apply 역할은 서비스 단위로 허용하므로 따로 받지 않는다.
   foundation_read_actions = [
     "autoscaling:Describe*",
     "ec2:Describe*",
@@ -84,11 +85,9 @@ module "iam_github_apply" {
   oidc_provider_arn   = module.iam_github_oidc.oidc_provider_arn
   boundary_arn        = module.iam_github_oidc.boundary_arn
   state_bucket_arn    = module.s3_terraform_state.arn
-  read_actions        = local.foundation_read_actions
   repository_arns     = local.web_repository_arns
   host_role_arns      = module.iam_ecs_roles.host_role_arns
   execution_role_arns = module.iam_ecs_roles.execution_role_arns
-  log_group_arns      = local.log_group_arns
 }
 
 module "iam_github_image" {
