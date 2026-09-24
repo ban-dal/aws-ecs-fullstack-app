@@ -47,7 +47,7 @@ flowchart LR
   Merge --> Image[이미지 빌드·preprod·prod ECR push]
   Merge --> Bootstrap[bootstrap 변경은 로컬 저장 plan 적용]
   Merge --> Dispatch[main에서 환경별 수동 실행]
-  Dispatch --> ApplyPlan[plan 환경 승인·확인]
+  Dispatch --> ApplyPlan[plan 요약 확인]
   ApplyPlan --> Approval[apply 환경 승인]
   Approval --> Apply[선택한 환경 apply]
 ```
@@ -63,5 +63,5 @@ flowchart LR
 - **환경 경계**: 두 환경의 Terraform 루트와 state key는 분리하지만 IAM 역할은 공유한다. apply 역할은 두 환경과 같은 계정의 EC2·ECS·Auto Scaling·Logs 리소스를 변경할 수 있다. GitHub 환경 승인과 저장 plan 비교로 적용 작업을 통제하며, 이 방식은 환경 간 IAM 격리나 IAM 비용 상한을 제공하지 않는다.
 - **ECS 역할** ([`iam`](../infra/modules/iam/main.tf)): 두 환경이 호스트 역할과 태스크 실행 역할을 공유한다. apply는 이 두 역할만 정해진 서비스에 넘길 수 있고, 태스크 실행 역할은 두 환경 저장소 pull과 로그 쓰기만 할 수 있다.
 - **사람의 운영 역할** ([`iam`](../infra/modules/iam/main.tf)): MFA 세션만 신뢰하는 계정 관리자 역할이다. bootstrap 운영에 쓰고 일상 배포는 GitHub 역할을 쓴다.
-- **GitHub 환경 승인** ([`scripts/check-github-settings.sh`](../scripts/check-github-settings.sh)): 1인 저장소라 자기 승인을 허용한다.
+- **GitHub 환경 승인** ([`scripts/check-github-settings.sh`](../scripts/check-github-settings.sh)): `*-apply`에만 필수 승인을 두고, 1인 저장소라 자기 승인을 허용한다.
 - **적용 workflow** ([`apply-foundation.yml`](../.github/workflows/apply-foundation.yml), [`scripts/tfplan.sh`](../scripts/tfplan.sh)): 승인한 plan과 같은 변경만 적용한다. 삭제·교체는 막으며, destroy 경로는 아직 없다.
