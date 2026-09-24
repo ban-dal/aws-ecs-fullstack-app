@@ -22,6 +22,10 @@ output "dns_name_servers" {
   value = module.route53_zone.name_servers
 }
 
+output "image_role_arns" {
+  value = module.iam_github_image.role_arns
+}
+
 output "operator_user_arn" {
   value = module.iam_operator.user_arn
 }

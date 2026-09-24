@@ -42,6 +42,7 @@ flowchart LR
   Checks --> Plan[preprod/prod plan]
   Plan --> Review[사람 리뷰]
   Review --> Merge[main merge]
+  Merge --> Image[이미지 빌드·preprod·prod ECR push]
   Merge --> Bootstrap[bootstrap 변경은 로컬 저장 plan 적용]
   Merge --> Dispatch[main에서 환경별 수동 실행]
   Dispatch --> ApplyPlan[plan 환경 승인·확인]
@@ -49,7 +50,7 @@ flowchart LR
   Approval --> Apply[선택한 환경 apply]
 ```
 
-구현 시 첫 배포에서는 ECR을 먼저 생성하고 이미지를 push한 뒤 ECS 서비스를 시작한다. 서비스는 bridge 네트워크의 동적 호스트 포트를 사용한다. ALB 대상 그룹은 instance 유형이고 EC2 보안 그룹은 ALB 보안 그룹에서 오는 임시 포트만 연다.
+이미지는 main에서 한 번 빌드해 두 환경 저장소에 같은 commit SHA 태그로 올린다. 배포는 이 태그를 고르므로 prod에는 preprod와 같은 커밋이 간다. 첫 배포에서는 이미지가 저장소에 있는 상태에서 ECS 서비스를 시작한다. 서비스는 bridge 네트워크의 동적 호스트 포트를 사용한다. ALB 대상 그룹은 instance 유형이고 EC2 보안 그룹은 ALB 보안 그룹에서 오는 임시 포트만 연다.
 
 ## 보안과 한계
 

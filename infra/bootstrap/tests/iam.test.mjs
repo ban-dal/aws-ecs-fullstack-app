@@ -104,6 +104,23 @@ for (const [environment, other] of [["preprod", "prod"], ["prod", "preprod"]]) {
     });
   });
 
+  describe(`${environment} 이미지 역할`, () => {
+    const image = { policies: [after[`module.iam_github_image.aws_iam_role_policy.this["${environment}"]`].policy], boundaries: [boundary] };
+
+    test(`${environment} 저장소에 이미지 push는 허용되고 ${other} 저장소 push는 거부된다`, async () => {
+      assert.equal(await decide({ ...image, action: "ecr:PutImage", resource: repository(environment), context: inRegion }), "allowed");
+      assert.equal(await decide({ ...image, action: "ecr:PutImage", resource: repository(other), context: inRegion }), "implicitDeny");
+    });
+    test("레지스트리 로그인은 이 리전에서만 허용된다", async () => {
+      assert.equal(await decide({ ...image, action: "ecr:GetAuthorizationToken", resource: "*", context: inRegion }), "allowed");
+      assert.equal(await decide({ ...image, action: "ecr:GetAuthorizationToken", resource: "*", context: { "aws:RequestedRegion": "us-east-1" } }), "implicitDeny");
+    });
+    test("저장소 삭제와 이미지 삭제는 거부된다", async () => {
+      assert.equal(await decide({ ...image, action: "ecr:DeleteRepository", resource: repository(environment), context: inRegion }), "implicitDeny");
+      assert.equal(await decide({ ...image, action: "ecr:BatchDeleteImage", resource: repository(environment), context: inRegion }), "implicitDeny");
+    });
+  });
+
   describe(`${environment} plan 역할`, () => {
     test(`${environment} state 읽기만 허용되고 쓰기는 거부된다`, async () => {
       assert.equal(await decide({ ...planRole, action: "s3:GetObject", resource: `${bucket}/${environment}/terraform.tfstate`, context: inRegion }), "allowed");
@@ -138,6 +155,9 @@ describe("bootstrap 운영 역할", () => {
 
   test("GitHub 역할 정책 수정은 허용된다", async () => {
     assert.equal(await decide({ ...op, action: "iam:PutRolePolicy", resource: applyRole }), "allowed");
+  });
+  test("이미지 역할의 boundary 제거는 명시적으로 거부된다", async () => {
+    assert.equal(await decide({ ...op, action: "iam:DeleteRolePermissionsBoundary", resource: role("aws-fullstack-lab-prod-image") }), "explicitDeny");
   });
   test("GitHub 역할의 boundary 제거는 명시적으로 거부된다", async () => {
     assert.equal(await decide({ ...op, action: "iam:DeleteRolePermissionsBoundary", resource: applyRole }), "explicitDeny");

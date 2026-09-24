@@ -77,15 +77,31 @@ module "iam_github_apply" {
   repository_arns    = local.web_repository_arns
 }
 
+module "iam_github_image" {
+  source = "../modules/iam-github-image"
+
+  account_id         = local.account_id
+  environments       = local.environments
+  region             = var.aws_region
+  repository_subject = var.github_repository_subject
+  oidc_provider_arn  = module.iam_github_oidc.oidc_provider_arn
+  boundary_arn       = module.iam_github_oidc.boundary_arn
+  repository_arns    = local.web_repository_arns
+}
+
 module "iam_operator" {
   source = "../modules/iam-operator"
 
   account_id               = local.account_id
   state_bucket_arn         = module.s3_terraform_state.arn
   github_oidc_provider_arn = module.iam_github_oidc.oidc_provider_arn
-  github_role_arns         = concat(values(module.iam_github_plan.role_arns), values(module.iam_github_apply.role_arns))
-  github_boundary_arn      = local.github_boundary_arn
-  budget_name              = local.budget_name
+  github_role_arns = concat(
+    values(module.iam_github_plan.role_arns),
+    values(module.iam_github_apply.role_arns),
+    values(module.iam_github_image.role_arns),
+  )
+  github_boundary_arn = local.github_boundary_arn
+  budget_name         = local.budget_name
 }
 
 module "budgets" {

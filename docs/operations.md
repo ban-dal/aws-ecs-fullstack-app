@@ -7,6 +7,7 @@
 | 대상 | 적용 주체 | 경로 |
 | --- | --- | --- |
 | 서비스 기반 (`infra/environments/<환경>`: VPC·보안 그룹·ECR 저장소) | GitHub 환경별 apply 역할 | [4절](#4-서비스-기반-적용)의 `Apply service foundation` |
+| 앱 이미지 (preprod·prod ECR) | GitHub 환경별 image 역할 | [이미지 빌드](#이미지-빌드)의 `Build image` |
 | bootstrap 중 state 버킷, OIDC 제공자, GitHub 역할의 정책·신뢰 정책 | 운영 역할 `aws-fullstack-lab-bootstrap-operator` | [2절](#2-bootstrap-변경-적용)의 `scripts/bootstrap.sh` |
 | bootstrap 중 운영 사용자·역할, Budget, GitHub 역할 boundary 정책, ECR 레지스트리 스캔 설정, 서비스 DNS 영역 | 계정 root 세션 | [2절](#2-bootstrap-변경-적용)의 `scripts/bootstrap.sh` |
 | 콘솔 비밀번호, MFA 장치 | 사용자 본인 | IAM 콘솔 |
@@ -49,7 +50,7 @@ aws sts get-caller-identity
 
 ### root (예외)
 
-운영 역할 권한 밖의 bootstrap 변경과 계정 복구에만 쓴다. root에는 MFA가 켜져 있어야 한다. 작업이 끝나면 브라우저와 CLI 세션을 로그아웃한다.
+운영 역할 권한 밖의 bootstrap 변경과 계정 복구에만 쓴다. root에는 MFA가 켜져 있어야 한다. `aws login`은 브라우저에 남아 있는 세션을 고를 수 있으므로, 콘솔의 IAM 사용자 세션을 로그아웃한 뒤 로그인하고 호출 주체가 `:root`로 끝나는지 확인한다. 작업이 끝나면 브라우저와 CLI 세션을 로그아웃한다.
 
 ```bash
 aws configure set region ap-northeast-2 --profile aws-fullstack-bootstrap
@@ -96,6 +97,10 @@ PR에서는 두 환경의 plan 요약과 바뀐 인프라 파일이 PR 댓글 �
 `prod`는 `preprod` 결과와 비용을 검토한 뒤 따로 결정한다. 서비스 기반 plan은 PR이나 이 workflow의 plan 단계에서 확인한다. 운영 역할에는 EC2 읽기 권한이 없어 로컬 `infra/environments/<환경>` plan은 지원하지 않는다.
 
 기본 AZ는 `ap-northeast-2a`, `ap-northeast-2c`다. 계정에서 쓸 수 없으면 두 환경의 `availability_zones`를 같은 순서로 지정한다. 적용 후 AZ 순서를 바꾸면 서브넷이 교체된다.
+
+### 이미지 빌드
+
+`Build image`(`.github/workflows/image.yml`)는 앱 파일이 바뀐 PR에서 arm64 이미지를 빌드하고, 컨테이너를 띄워 `/api/health`를 확인한다. main에 merge되면 같은 이미지를 commit SHA 태그로 preprod·prod 저장소에 올리고, 실행 요약에 태그·digest·취약점 스캔 결과 개수를 남긴다. 저장소 태그는 덮어쓸 수 없으므로, 같은 태그가 있으면 건너뛴다. 앱 파일 변경 없이 다시 올리려면 main에서 workflow를 수동 실행한다.
 
 ### 도메인 위임
 

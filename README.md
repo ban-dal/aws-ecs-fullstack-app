@@ -13,6 +13,7 @@ Next.js 앱과 AWS 인프라를 한 저장소에서 관리하는 프로젝트다
 | `.github/workflows/ci.yml` | PR과 main의 앱 타입 검사·빌드 |
 | `.github/workflows/terraform.yml` | PR Terraform fmt·validate, 설정 후 환경별 plan |
 | `.github/workflows/apply-foundation.yml` | main에서 수동 실행하는 환경별 기반 인프라 plan·승인·apply |
+| `.github/workflows/image.yml` | PR에서 arm64 이미지 빌드·health 확인, main에서 preprod·prod ECR에 같은 이미지 push |
 | `scripts/` | bootstrap plan·apply와 정책 테스트, GitHub 설정 확인 |
 | `docs/` | 제품, 디자인, 아키텍처, 운영 절차 |
 
@@ -41,6 +42,7 @@ GitHub Actions는 AWS 장기 키 없이 OIDC 역할로 AWS에 접근한다. 그�
 | Variable | 환경 `preprod-apply`, `prod-apply` | `AWS_APPLY_ROLE_ARN` | bootstrap output `apply_role_arns`의 해당 환경 값 |
 
 - 계정 ID와 버킷 이름을 변수가 아닌 secret으로 두는 이유는 공개 Actions 로그에서 가리기 위해서다. 같은 이름의 저장소 변수는 두지 않는다.
+- 이미지 push 역할은 환경을 쓰지 않으므로 변수가 없다. `image.yml`이 계정 ID secret과 역할 이름으로 ARN을 만든다.
 - 네 환경에는 `ban-dal` 필수 승인자를 두고, `*-apply` 환경은 `main` 브랜치에서만 배포하게 한다. 환경 보호 규칙은 변수보다 먼저 만든다.
 - secret은 명령줄 인자로 넘기지 말고, 프롬프트에 붙여 넣거나 로컬 파일에서 읽어 넣는다. 셸 기록과 로그에 값을 남기지 않기 위해서다.
 

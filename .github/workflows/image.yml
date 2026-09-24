@@ -1,0 +1,91 @@
+# 앱 컨테이너 이미지를 빌드한다. PR에서는 빌드하고 컨테이너의 /api/health만 확인한다.
+# main에서는 같은 이미지를 commit SHA 태그로 preprod·prod ECR 저장소에 각 환경의 image
+# 역할로 올린다. 한 번 빌드한 이미지를 두 환경이 쓰므로, prod에는 preprod와 같은 커밋이
+# 배포된다. ECS 호스트가 t4g(Arm)이므로 arm64 runner에서 빌드한다.
+name: Build image
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - apps/**
+      - package.json
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - .npmrc
+      - .github/workflows/image.yml
+      - scripts/push-image.sh
+  push:
+    branches: [main]
+    paths:
+      - apps/**
+      - package.json
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - .npmrc
+      - .github/workflows/image.yml
+      - scripts/push-image.sh
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# shell을 지정해야 -eo pipefail로 실행되어 파이프 중간의 실패가 가려지지 않는다.
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: image-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'ap-northeast-2' }}
+      # 계정 ID는 secret이라 로그에서 가려진다.
+      AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+      IMAGE_TAG: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build
+        run: docker build --platform linux/arm64 -f apps/web/Dockerfile -t "web:$IMAGE_TAG" .
+      - name: Check /api/health in the container
+        run: |
+          docker run -d --name web -p 3000:3000 -e APP_ENV=ci "web:$IMAGE_TAG"
+          for _ in $(seq 1 30); do
+            if body="$(curl -fsS http://127.0.0.1:3000/api/health)"; then
+              echo "$body"
+              jq -e '.status == "ok"' <<<"$body" >/dev/null
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs web
+          exit 1
+
+      # 아래는 main에서만 실행된다. image 역할은 main 브랜치 토큰만 신뢰한다.
+      # 역할 이름은 infra/modules/iam-github-image와 같아야 한다.
+      - if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/aws-fullstack-lab-preprod-image
+          aws-region: ${{ env.AWS_REGION }}
+      - if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        name: Push to preprod
+        run: scripts/push-image.sh preprod "web:$IMAGE_TAG"
+      - if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/aws-fullstack-lab-prod-image
+          aws-region: ${{ env.AWS_REGION }}
+      - if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        name: Push to prod
+        run: scripts/push-image.sh prod "web:$IMAGE_TAG"
