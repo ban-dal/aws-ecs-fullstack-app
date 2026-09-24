@@ -197,6 +197,14 @@ data "aws_iam_policy_document" "operator_permissions" {
     resources = ["arn:aws:budgets::${data.aws_caller_identity.current.account_id}:budget/aws-fullstack-lab-monthly"]
   }
 
+  # bootstrap plan이 레지스트리 스캔 설정을 refresh하기 위한 읽기 권한이다. 이 API는
+  # 리소스 수준 권한을 지원하지 않는다.
+  statement {
+    sid       = "ReadRegistryScanning"
+    actions   = ["ecr:GetRegistryScanningConfiguration"]
+    resources = ["*"]
+  }
+
   # scripts/bootstrap.sh가 apply 전에 정책 테스트를 실행하기 위한 권한이다.
   # 시뮬레이터는 요청에 넣은 정책을 판정할 뿐 권한을 주지 않는다.
   statement {

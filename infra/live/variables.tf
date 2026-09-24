@@ -22,6 +22,8 @@ locals {
     for index, az in var.availability_zones : az => cidrsubnet(local.vpc_cidr, 8, index + 10)
   }
 
+  # 태그는 provider default_tags 대신 각 리소스에 명시한다. Environment 태그는 적용
+  # 역할의 권한 조건이므로 모든 리소스에 빠짐없이 있어야 한다.
   tags = {
     Project     = "aws-fullstack-lab"
     Environment = var.environment
