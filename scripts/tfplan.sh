@@ -13,10 +13,14 @@ plan_json="${2:-}"
 
 case "$command" in
   summary)
+    # 기존 리소스를 state로 가져오기만 하는 import는 no-op이지만 리뷰에서 보이도록 따로 센다.
     jq -r '
-      def kind: if (.change.actions | length) > 1 then "replace" else .change.actions[0] end;
-      [.resource_changes[]? | select(.change.actions != ["no-op"]) | {address, kind: kind}] as $changes
-      | ([["create", "update", "delete", "replace"][] as $k
+      def kind:
+        if (.change.actions | length) > 1 then "replace"
+        elif .change.actions == ["no-op"] and .change.importing then "import"
+        else .change.actions[0] end;
+      [.resource_changes[]? | select(.change.actions != ["no-op"] or .change.importing) | {address, kind: kind}] as $changes
+      | ([["create", "update", "delete", "replace", "import"][] as $k
           | "\($k)=\([$changes[] | select(.kind == $k)] | length)"] | join(" ")),
         ($changes[] | "- \(.kind) \(.address)")
     ' "$plan_json"
@@ -43,7 +47,7 @@ case "$command" in
     # 승인한 plan과 적용할 plan이 같은지 비교하는 값이다. 실행 시각처럼 매번 달라지는
     # 필드는 빼고, 리소스와 output의 변경 내용만 키 순서를 정렬해 해시한다.
     jq -S -c '{
-      resource_changes: [.resource_changes[]? | {address, change: (.change | {actions, before, after, after_unknown})}],
+      resource_changes: [.resource_changes[]? | {address, change: (.change | {actions, before, after, after_unknown, importing})}],
       output_changes: (.output_changes // {})
     }' "$plan_json" | shasum -a 256 | cut -d' ' -f1
     ;;

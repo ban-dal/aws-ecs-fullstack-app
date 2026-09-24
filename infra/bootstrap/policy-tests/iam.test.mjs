@@ -157,6 +157,10 @@ describe("bootstrap 운영 역할", () => {
   test("자기 역할 정책 수정은 거부된다", async () => {
     assert.equal(await decide({ ...op, action: "iam:PutRolePolicy", resource: role("aws-fullstack-lab-bootstrap-operator") }), "implicitDeny");
   });
+  test("레지스트리 스캔 설정 읽기는 허용되고 변경은 거부된다", async () => {
+    assert.equal(await decide({ ...op, action: "ecr:GetRegistryScanningConfiguration", resource: "*" }), "allowed");
+    assert.equal(await decide({ ...op, action: "ecr:PutRegistryScanningConfiguration", resource: "*" }), "implicitDeny");
+  });
   test("정책 시뮬레이터 호출은 허용된다", async () => {
     assert.equal(await decide({ ...op, action: "iam:SimulateCustomPolicy", resource: "*" }), "allowed");
   });
