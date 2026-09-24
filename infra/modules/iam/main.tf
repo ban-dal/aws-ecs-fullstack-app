@@ -52,6 +52,12 @@ resource "aws_iam_role" "github" {
   tags                 = { Project = "aws-fullstack-lab", Purpose = each.key }
 }
 
+# 계정의 첫 AWS Client VPN 엔드포인트는 서비스 연결 역할을 자동 생성하려 한다.
+# GitHub apply 역할에 IAM 생성 권한을 주지 않도록 bootstrap에서 한 번 만든다.
+resource "aws_iam_service_linked_role" "client_vpn" {
+  aws_service_name = "clientvpn.amazonaws.com"
+}
+
 # plan은 두 환경 state 본문을 읽고 각 lock 객체만 변경한다. 서비스 refresh는 조회만 한다.
 data "aws_iam_policy_document" "plan" {
   statement {
