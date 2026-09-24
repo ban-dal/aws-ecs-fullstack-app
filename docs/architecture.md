@@ -27,7 +27,11 @@ flowchart LR
 
 ## 환경과 데이터 경계
 
-`preprod`와 `prod`는 AI 성능 실험과 학습을 위한 환경이다. `infra/plan` 루트와 `infra/live` 모듈을 공유하되 별도 `environment` 값을 넣는다. VPC CIDR은 각각 `10.60.0.0/16`, `10.61.0.0/16`이고 ECR 및 네트워크 이름과 `preprod/terraform.tfstate`, `prod/terraform.tfstate` 키를 분리한다. 향후 ECS·ALB·S3·Lambda도 환경별 이름을 사용한다. 두 환경은 한 AWS 계정을 공유하므로 IAM과 계정 수준 장애는 분리되지 않는다. 계정을 나누려면 AWS Organizations가 필요한데, 현재 Free plan 계정이 가입하면 크레딧이 즉시 만료되고 유료 플랜으로 전환된다. 실제 사용자 데이터를 다루거나 Free plan이 끝나거나 환경 간 IAM 격리가 필요해지면 계정 분리를 다시 검토한다.
+`preprod`와 `prod`는 AI 성능 실험과 학습을 위한 환경이다. 같은 모듈을 쓰되 루트는 `infra/environments/preprod`, `infra/environments/prod`로 나눈다. 두 환경은 값뿐 아니라 구성이 달라지므로, 각 루트의 `main.tf`가 그 환경의 구성을 그대로 보여 주게 하기 위해서다. VPC CIDR은 각각 `10.60.0.0/16`, `10.61.0.0/16`이고 리소스 이름과 `preprod/terraform.tfstate`, `prod/terraform.tfstate` 키를 분리한다.
+
+- **preprod:** 고가용성이 필요 없다. 앱 계층을 추가할 때 ECS 호스트는 한 대로 두고, 앱 접근은 허용한 IP(보안 그룹 허용 목록)로만 연다. VPN은 비용을 검토한 뒤 필요할 때 추가한다.
+- **prod:** 두 AZ에 호스트를 두고 공개 HTTPS로 제공한다.
+- ALB는 서브넷이 두 AZ에 있어야 하므로 두 환경 모두 VPC 서브넷은 두 AZ에 둔다. 두 환경은 한 AWS 계정을 공유하므로 IAM과 계정 수준 장애는 분리되지 않는다. 계정을 나누려면 AWS Organizations가 필요한데, 현재 Free plan 계정이 가입하면 크레딧이 즉시 만료되고 유료 플랜으로 전환된다. 실제 사용자 데이터를 다루거나 Free plan이 끝나거나 환경 간 IAM 격리가 필요해지면 계정 분리를 다시 검토한다.
 
 ## 배포 흐름
 
@@ -48,11 +52,11 @@ flowchart LR
 
 ## 보안과 한계
 
-권한 정책이 무엇을 허용하고 거부해야 하는지는 [`infra/bootstrap/policy-tests/`](../infra/bootstrap/policy-tests/iam.test.mjs)의 테스트가 기준이다. bootstrap을 적용할 때마다 `scripts/bootstrap.sh plan`이 이 테스트를 실행한다.
+권한 정책이 무엇을 허용하고 거부해야 하는지는 [`infra/bootstrap/tests/`](../infra/bootstrap/tests/iam.test.mjs)의 테스트가 기준이다. bootstrap을 적용할 때마다 `scripts/bootstrap.sh plan`이 이 테스트를 실행한다.
 
-- **state 버킷** ([`main.tf`](../infra/bootstrap/main.tf)): 공개 접근 차단, HTTPS 강제, 암호화, 버전 관리.
-- **GitHub OIDC 역할** ([`main.tf`](../infra/bootstrap/main.tf), [`apply.tf`](../infra/bootstrap/apply.tf)): 저장소 immutable subject와 GitHub 환경 이름으로 신뢰를 제한하고, 환경별 plan·apply 역할이 자기 환경만 다룬다.
-- **permissions boundary** ([`boundary.tf`](../infra/bootstrap/boundary.tf)): 모든 GitHub 역할의 상한. IAM·STS 권한은 얻지 못한다.
-- **사람의 운영 역할** ([`operator.tf`](../infra/bootstrap/operator.tf)): MFA 세션만 신뢰한다. 프로젝트 인프라 전체를 바꿀 수 있으므로 일상 배포에는 쓰지 않는다.
+- **state 버킷** ([`s3-terraform-state`](../infra/modules/s3-terraform-state/main.tf)): 공개 접근 차단, HTTPS 강제, 암호화, 버전 관리.
+- **GitHub OIDC 역할** ([`iam-github-plan`](../infra/modules/iam-github-plan/main.tf), [`iam-github-apply`](../infra/modules/iam-github-apply/main.tf)): 저장소 immutable subject와 GitHub 환경 이름으로 신뢰를 제한하고, 환경별 plan·apply 역할이 자기 환경만 다룬다.
+- **permissions boundary** ([`iam-github-oidc`](../infra/modules/iam-github-oidc/main.tf)): 모든 GitHub 역할의 상한. IAM·STS 권한은 얻지 못한다.
+- **사람의 운영 역할** ([`iam-operator`](../infra/modules/iam-operator/main.tf)): MFA 세션만 신뢰한다. 프로젝트 인프라 전체를 바꿀 수 있으므로 일상 배포에는 쓰지 않는다.
 - **GitHub 환경 승인** ([`scripts/check-github-settings.sh`](../scripts/check-github-settings.sh)): 1인 저장소라 자기 승인을 허용한다.
 - **적용 workflow** ([`apply-foundation.yml`](../.github/workflows/apply-foundation.yml), [`scripts/tfplan.sh`](../scripts/tfplan.sh)): 승인한 plan과 같은 변경만 적용한다. 삭제·교체는 막으며, destroy 경로는 아직 없다.

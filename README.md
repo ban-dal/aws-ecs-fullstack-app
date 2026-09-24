@@ -7,9 +7,9 @@ Next.js 앱과 AWS 인프라를 한 저장소에서 관리하는 프로젝트다
 | 경로 | 용도 |
 | --- | --- |
 | `apps/web` | Next.js 앱과 `/api/health` |
-| `infra/bootstrap` | state S3 버킷, GitHub OIDC 역할과 boundary, 선택형 비용 Budget, 사람의 비루트 운영 역할 |
-| `infra/plan` | 환경별 원격 state·계정 확인·서비스 기반 모듈을 연결하는 PR plan 루트 |
-| `infra/live` | VPC·서브넷·라우팅·보안 그룹·비공개 ECR 모듈 |
+| `infra/bootstrap` | 계정·IAM 루트: state 버킷, GitHub OIDC 역할과 boundary, 비용 Budget, 사람의 운영 역할, ECR 스캔 |
+| `infra/environments/<환경>` | preprod·prod 서비스 루트: VPC, 보안 그룹, ECR 저장소 |
+| `infra/modules` | AWS 서비스 이름으로 나눈 모듈. 구조와 규칙은 [infra/README.md](infra/README.md) |
 | `.github/workflows/ci.yml` | PR과 main의 앱 타입 검사·빌드 |
 | `.github/workflows/terraform.yml` | PR Terraform fmt·validate, 설정 후 환경별 plan |
 | `.github/workflows/apply-foundation.yml` | main에서 수동 실행하는 환경별 기반 인프라 plan·승인·apply |
@@ -38,7 +38,7 @@ pnpm dev
 ## 다음 단계
 
 1. `prod` 서비스 기반 적용(`Apply service foundation` 실행).
-2. preprod 보안 그룹 규칙 import 블록(`infra/plan/imports.tf`) 삭제. preprod 적용 뒤에는 아무 일도 하지 않으므로 다음 인프라 PR에 함께 넣는다.
+2. `infra/bootstrap/moved.tf`, `infra/environments/preprod/moved.tf` 삭제. bootstrap과 preprod에 적용한 뒤에는 아무 일도 하지 않으므로 다음 인프라 PR에 함께 넣는다.
 3. 이미지 빌드·push, ECS on EC2, ALB·ACM·Route 53(공개 스위치 `enable_public_app` 기본 `false`), 배포 흐름과 종료 절차, S3·Lambda 예제를 비용 선택지와 함께 추가한다.
 
 ## 문서

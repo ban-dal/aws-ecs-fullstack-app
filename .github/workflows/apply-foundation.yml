@@ -1,5 +1,5 @@
-# merge된 main에서만 한 환경의 infra/plan을 적용한다. merge만으로는 배포되지 않는다.
-# plan과 apply는 서로 다른 OIDC 역할과 GitHub 환경을 쓴다. plan 파일에는 민감한 값이
+# merge된 main에서만 한 환경의 루트(infra/environments/<environment>)를 적용한다.
+# merge만으로는 배포되지 않는다. plan과 apply는 서로 다른 OIDC 역할과 GitHub 환경을 쓴다. plan 파일에는 민감한 값이
 # 들어갈 수 있으므로 저장 plan은 runner 밖으로 내보내지 않는다.
 #
 # plan 작업은 변경 요약을 실행 화면에 올리고 변경 내용의 fingerprint를 넘긴다. apply
@@ -68,13 +68,13 @@ jobs:
       - name: Plan the selected state
         id: plan
         run: |
-          terraform -chdir=infra/plan init -input=false \
+          terraform -chdir="infra/environments/$TARGET_ENV" init -input=false \
             -backend-config="bucket=$TF_STATE_BUCKET" \
             -backend-config="key=$TARGET_ENV/terraform.tfstate" \
             -backend-config="region=$AWS_REGION"
-          terraform -chdir=infra/plan plan -input=false -no-color -lock-timeout=5m \
-            -var="environment=$TARGET_ENV" -out="$RUNNER_TEMP/foundation.tfplan"
-          terraform -chdir=infra/plan show -json "$RUNNER_TEMP/foundation.tfplan" > "$RUNNER_TEMP/foundation.json"
+          terraform -chdir="infra/environments/$TARGET_ENV" plan -input=false -no-color -lock-timeout=5m \
+            -out="$RUNNER_TEMP/foundation.tfplan"
+          terraform -chdir="infra/environments/$TARGET_ENV" show -json "$RUNNER_TEMP/foundation.tfplan" > "$RUNNER_TEMP/foundation.json"
           {
             echo "## $TARGET_ENV plan"
             scripts/tfplan.sh summary "$RUNNER_TEMP/foundation.json"
@@ -121,13 +121,13 @@ jobs:
         env:
           APPROVED_FINGERPRINT: ${{ needs.plan.outputs.fingerprint }}
         run: |
-          terraform -chdir=infra/plan init -input=false \
+          terraform -chdir="infra/environments/$TARGET_ENV" init -input=false \
             -backend-config="bucket=$TF_STATE_BUCKET" \
             -backend-config="key=$TARGET_ENV/terraform.tfstate" \
             -backend-config="region=$AWS_REGION"
-          terraform -chdir=infra/plan plan -input=false -no-color -lock-timeout=5m \
-            -var="environment=$TARGET_ENV" -out="$RUNNER_TEMP/foundation.tfplan"
-          terraform -chdir=infra/plan show -json "$RUNNER_TEMP/foundation.tfplan" > "$RUNNER_TEMP/foundation.json"
+          terraform -chdir="infra/environments/$TARGET_ENV" plan -input=false -no-color -lock-timeout=5m \
+            -out="$RUNNER_TEMP/foundation.tfplan"
+          terraform -chdir="infra/environments/$TARGET_ENV" show -json "$RUNNER_TEMP/foundation.tfplan" > "$RUNNER_TEMP/foundation.json"
           scripts/tfplan.sh check-foundation "$RUNNER_TEMP/foundation.json"
           fingerprint="$(scripts/tfplan.sh fingerprint "$RUNNER_TEMP/foundation.json")"
           if [ "$fingerprint" != "$APPROVED_FINGERPRINT" ]; then
@@ -137,4 +137,4 @@ jobs:
           fi
           echo "승인한 plan과 같다: $fingerprint"
       - name: Apply the approved plan
-        run: terraform -chdir=infra/plan apply -input=false -no-color "$RUNNER_TEMP/foundation.tfplan"
+        run: terraform -chdir="infra/environments/$TARGET_ENV" apply -input=false -no-color "$RUNNER_TEMP/foundation.tfplan"
