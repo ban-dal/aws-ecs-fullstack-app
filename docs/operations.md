@@ -6,7 +6,7 @@
 
 | 대상 | 적용 주체 | 경로 |
 | --- | --- | --- |
-| 서비스 기반 (`infra/environments/<환경>`: VPC·보안 그룹·ECR 저장소) | 두 환경 공통 GitHub apply 역할 | [4절](#4-서비스-기반-적용)의 `Apply service foundation` |
+| 서비스 기반 (`infra/environments/<환경>`: VPC·보안 그룹·ECR 저장소·preprod ECS) | 두 환경 공통 GitHub apply 역할 | [4절](#4-서비스-기반-적용)의 `Apply service foundation` |
 | 앱 이미지 (preprod·prod ECR) | 공통 GitHub image 역할 | [이미지 빌드](#이미지-빌드)의 `Build image` |
 | bootstrap 전체 | 운영 역할 `aws-fullstack-lab-bootstrap-operator` | [2절](#2-bootstrap-변경-적용)의 `scripts/bootstrap.sh` |
 | 콘솔 비밀번호, MFA 장치 | 사용자 본인 | IAM 콘솔 |
@@ -103,6 +103,26 @@ PR에서는 두 환경의 plan 요약과 바뀐 인프라 파일이 PR 댓글 �
 
 `Build image`(`.github/workflows/image.yml`)는 앱 파일이 바뀐 PR에서 arm64 이미지를 빌드하고, 컨테이너를 띄워 `/api/health`를 확인한다. main에 merge되면 같은 이미지를 commit SHA 태그로 preprod·prod 저장소에 올리고, 실행 요약에 태그·digest·취약점 스캔 결과 개수를 남긴다. 저장소 태그는 덮어쓸 수 없으므로, 같은 태그가 있으면 건너뛴다. 앱 파일 변경 없이 다시 올리려면 main에서 workflow를 수동 실행한다.
 
+### preprod 앱과 VPN 접속
+
+ECS 호스트의 WireGuard는 AWS Client VPN 엔드포인트를 만들지 않는다. 공개 IPv4에는 UDP 51820만 열고 앱 HTTP 3000과 SSH는 열지 않는다. 첫 배포는 ECR에 이미 push된 이미지 태그를 사용한다.
+
+1. ECS/IAM 변경을 포함한 PR을 merge한 뒤 [2절](#2-bootstrap-변경-적용)로 bootstrap을 먼저 적용한다. 그다음 [4절](#4-서비스-기반-적용)의 `Apply service foundation`을 **preprod**로 한 번 실행한다. prod는 적용하지 않는다.
+2. 로컬에 WireGuard 앱과 `wg` 명령을 설치한다. [1절](#운영-역할-일상)의 MFA 운영 역할 프로필을 활성화한 뒤 아래 명령을 실행한다. 스크립트는 클라이언트 개인 키를 `~/.config/aws-fullstack-lab/preprod/`에만 저장하고, SSM에는 공개 키만 보낸다. 키 파일과 `.conf`를 저장소나 메시지에 올리지 않는다.
+
+   ```bash
+   export AWS_PROFILE=aws-fullstack-operator-terraform
+   scripts/preprod-access.sh enroll
+   ```
+
+3. 출력된 `preprod.conf`를 WireGuard 앱에 가져와 연결한다. `http://10.62.0.1:3000` 페이지가 열리고 아래 명령에서 `runningCount`가 1, health 응답의 `status`가 `ok`, `environment`가 `preprod`인지 확인한다.
+
+   ```bash
+   scripts/preprod-access.sh check
+   ```
+
+호스트가 교체되거나 중지 후 다시 시작되면 공개 IP·서버 키·peer가 바뀔 수 있다. 기존 터널을 끊고 `enroll`을 다시 실행해 `.conf`를 다시 가져온다. 기기 분실 등으로 접속을 끊어야 하면 `scripts/preprod-access.sh revoke`로 서버의 peer를 제거한다.
+
 ### 도메인 위임
 
 `bandal.dev`는 Vercel에서 등록했고 DNS도 Vercel이 관리한다. 서비스 주소에는 하위 도메인 `aws.bandal.dev`만 Route 53 영역(`modules/route53-zone`)으로 위임한다. Vercel의 `*` ALIAS와 CAA 레코드는 바꾸지 않는다. 명시적인 NS 위임이 와일드카드보다 우선하고, CAA는 이 영역에 따로 둔다.
@@ -160,10 +180,13 @@ PR에서는 두 환경의 plan 요약과 바뀐 인프라 파일이 PR 댓글 �
 - Budget([`modules/budgets`](../infra/modules/budgets/main.tf))은 이메일로 알리기만 하고 지출을 멈추지 않는다.
 - IAM, VPC, Internet Gateway 자체는 무료다. S3 state 저장·요청과 ECR 이미지 저장·전송은 사용량에 따라 과금된다. state 버킷의 이전 버전은 lifecycle 규칙으로 만료된다.
 - Route 53 호스팅 영역은 월 $0.50이다. 퍼블릭 IPv4, EC2, ALB도 과금 대상이다. 추가하는 PR에서 서울 리전 요금으로 비용을 계산하고, 공개 앱은 기본적으로 끈다. NAT Gateway는 쓰지 않는다.
+- preprod 호스트는 `t4g.small` 1대, 30 GiB gp3 EBS, 공개 IPv4 1개와 CloudWatch 로그를 쓴다. 24시간 가동 시 EC2 정가 약 $15/월, IPv4 약 $3.65/월, EBS 약 $3~4/월에 로그·전송량이 더해진다. AWS의 `t4g.small` 월 750시간 체험이 2026년 말까지 해당 계정에 적용되면 EC2 사용액은 줄지만, 실제 Free plan 크레딧·체험 잔량은 Billing에서 확인한다. WireGuard에는 별도 AWS VPN 시간당 요금이 없다.
+- preprod를 쉬게 할 때 `scripts/preprod-access.sh stop`은 ECS 태스크와 Auto Scaling 호스트를 0대로 줄인다. EBS와 공개 IP는 호스트 종료와 함께 해제되고, 로그·ECR 저장 비용은 남는다. `start`로 다시 올린 뒤 `enroll`을 다시 한다. 이 일시 중지는 Terraform 선언값(1대)과 차이를 만드므로 다음 `Apply service foundation` plan은 호스트 재시작을 표시한다.
 
 ## 7. 종료·롤백·복구
 
-- 서비스 기반 종료: ECS·ALB 등 종속 리소스를 먼저 없앤다. ECR은 `force_delete=false`이므로 이미지를 비운 뒤 삭제한다. 현재 workflow에는 destroy 경로가 없으므로 환경별 `terraform plan -destroy`를 검토하는 별도 절차를 PR로 만든다.
+- preprod 일시 중지: `scripts/preprod-access.sh stop`으로 호스트와 태스크를 0대로 줄인다. 다시 접속할 때는 `start`, `enroll`을 실행한다.
+- 서비스 기반 완전 종료: ECS·ALB 등 종속 리소스를 먼저 없앤다. ECR은 `force_delete=false`이므로 이미지를 비운 뒤 삭제한다. 현재 workflow에는 destroy 경로가 없으므로 환경별 `terraform plan -destroy`를 검토하는 별도 절차를 PR로 만든다.
 - bootstrap 롤백: 되돌리는 PR을 merge한 뒤 [2절](#2-bootstrap-변경-적용)로 적용하고, 바뀐 GitHub 변수를 되돌린다.
 - Terraform 오류: 마지막 성공 state의 S3 버전을 확인하고 state를 손으로 고치지 않는다. `terraform plan`으로 선언과 실제의 차이를 먼저 본다.
 - state 버킷: 삭제 전에 `bootstrap`, `preprod`, `prod` state를 백업하고 OIDC 역할 사용을 멈춘다. 버킷은 `force_destroy=false`다.
@@ -172,6 +195,7 @@ PR에서는 두 환경의 plan 요약과 바뀐 인프라 파일이 PR 댓글 �
 ## 외부 참고
 
 - [AWS Free Tier FAQ](https://aws.amazon.com/free/free-tier-faqs/)
+- [EC2 T4g 체험과 요금](https://aws.amazon.com/ec2/faqs/), [EBS 요금](https://aws.amazon.com/ebs/pricing/), [AWS VPN 요금](https://aws.amazon.com/vpn/pricing/)
 - [AWS Budgets 요금](https://aws.amazon.com/aws-cost-management/aws-budgets/pricing/), [ECR 요금](https://aws.amazon.com/ecr/pricing/), [VPC 요금](https://aws.amazon.com/vpc/pricing/), [ALB 요금](https://aws.amazon.com/elasticloadbalancing/pricing/)
 - [GitHub OIDC와 AWS](https://docs.github.com/en/actions/how-tos/secure-your-work/security-harden-deployments/oidc-in-aws), [GitHub 환경](https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments)
 - [Terraform S3 backend](https://developer.hashicorp.com/terraform/language/backend/s3)

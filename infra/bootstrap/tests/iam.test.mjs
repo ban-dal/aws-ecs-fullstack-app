@@ -65,6 +65,13 @@ for (const environment of ["preprod", "prod"]) {
 }
 
 describe("공통 IAM 경계", () => {
+  test("ECS 호스트의 SSM 관리 권한은 연결되고 GitHub apply는 IAM 정책 연결을 거부한다", async () => {
+    const attachment = after["module.iam.aws_iam_role_policy_attachment.ecs_host_ssm"];
+    assert.equal(attachment.role, "aws-fullstack-lab-ecs-host");
+    assert.equal(attachment.policy_arn, "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore");
+    assert.equal(await decide(applyPolicy, "iam:AttachRolePolicy", role("ecs-host")), "implicitDeny");
+  });
+
   test("GitHub 역할은 bootstrap state 읽기와 IAM 역할 생성을 거부한다", async () => {
     for (const document of [planPolicy, applyPolicy, imagePolicy]) {
       assert.equal(await decide(document, "s3:GetObject", `${bucket}/bootstrap/terraform.tfstate`), "implicitDeny");

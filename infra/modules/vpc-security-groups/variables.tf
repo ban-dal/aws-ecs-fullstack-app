@@ -13,3 +13,8 @@ variable "vpc_cidr" {
 variable "tags" {
   type = map(string)
 }
+
+variable "enable_wireguard" {
+  type    = bool
+  default = false
+}

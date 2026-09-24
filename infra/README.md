@@ -15,11 +15,14 @@ infra/
 | [`budgets`](modules/budgets/main.tf) | 월간 비용 알림 | bootstrap |
 | [`ecr-registry`](modules/ecr-registry/main.tf) | 레지스트리(계정) 단위 push 스캔 | bootstrap |
 | [`ecr-repository`](modules/ecr-repository/main.tf) | 환경별 이미지 저장소와 lifecycle | preprod, prod |
+| [`ec2-ecs-host`](modules/ec2-ecs-host/main.tf) | 단일 ECS 호스트와 WireGuard 서버 | preprod |
+| [`ecs-cluster`](modules/ecs-cluster/main.tf) | ECS 클러스터 | preprod |
+| [`ecs-preprod-web`](modules/ecs-preprod-web/main.tf) | 앱 태스크·서비스·로그 | preprod |
 | [`iam`](modules/iam/main.tf) | GitHub OIDC, 공통 plan·apply·image 역할, 사람의 MFA 운영 역할, 공통 ECS 역할, 서비스 연결 역할 | bootstrap |
 | [`route53-zone`](modules/route53-zone/main.tf) | 서비스 도메인 `aws.bandal.dev` 영역과 CAA | bootstrap |
 | [`s3-terraform-state`](modules/s3-terraform-state/main.tf) | Terraform state 버킷 | bootstrap |
 | [`vpc`](modules/vpc/main.tf) | VPC, 서브넷, Internet Gateway, 라우팅 | preprod, prod |
-| [`vpc-security-groups`](modules/vpc-security-groups/main.tf) | ALB·ECS 호스트 보안 그룹과 규칙 | preprod, prod |
+| [`vpc-security-groups`](modules/vpc-security-groups/main.tf) | ALB·ECS 호스트·preprod WireGuard 보안 그룹과 규칙 | preprod, prod |
 
 ## 규칙
 
