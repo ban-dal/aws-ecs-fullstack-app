@@ -2,7 +2,7 @@
 # `terraform show -json`으로 만든 plan JSON을 요약·검사한다. bootstrap 스크립트와
 # GitHub workflow가 같은 기준을 쓰도록 한곳에 둔다.
 #
-#   scripts/tfplan.sh summary <plan.json>            # 생성·수정·삭제·교체 개수와 대상 목록
+#   scripts/tfplan.sh summary <plan.json>            # 생성·수정·삭제·교체·state 제외 개수와 대상 목록
 #   scripts/tfplan.sh check-foundation <plan.json>   # 적용 workflow가 허용하는 변경인지 검사
 #   scripts/tfplan.sh fingerprint <plan.json>        # 변경 내용의 해시
 set -euo pipefail
@@ -14,7 +14,7 @@ plan_json="${2:-}"
 case "$command" in
   summary)
     # 기존 리소스를 state로 가져오는 import와 주소만 바꾸는 move는 no-op이지만, 리뷰에서
-    # 보이도록 따로 센다.
+    # 보이도록 따로 센다. forget은 removed 블록으로 리소스를 지우지 않고 state에서만 뺀다.
     jq -r '
       def kind:
         if (.change.actions | length) > 1 then "replace"
@@ -23,7 +23,7 @@ case "$command" in
         else .change.actions[0] end;
       [.resource_changes[]? | select(.change.actions != ["no-op"] or .change.importing or .previous_address)
         | {address, kind: kind, from: .previous_address}] as $changes
-      | ([["create", "update", "delete", "replace", "import", "move"][] as $k
+      | ([["create", "update", "delete", "replace", "forget", "import", "move"][] as $k
           | "\($k)=\([$changes[] | select(.kind == $k)] | length)"] | join(" ")),
         ($changes[] | "- \(.kind) \(.address)" + (if .from then " (from \(.from))" else "" end))
     ' "$plan_json"

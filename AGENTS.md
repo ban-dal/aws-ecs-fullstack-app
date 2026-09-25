@@ -12,8 +12,8 @@
 - Terraform state, `.tfvars`, 계정 비밀, AWS 자격 증명은 커밋하지 않는다. GitHub Actions는 OIDC를 사용한다.
 - 저장소는 공개다. AWS 계정 ID, state 버킷 이름, 개인 연락처는 코드·문서·PR 본문·PR 댓글에 쓰지 않고 `<account-id>`, `<state-bucket>`처럼 가린다. 스크립트 출력을 붙여 넣을 때도 가려졌는지 확인한다.
 - Terraform을 구현할 때 `preprod`와 `prod`는 서로 다른 S3 state key와 리소스 이름을 유지한다. 한 환경 변경이 다른 환경에 영향을 주는지 검토한다.
-- 사람의 확인은 PR merge와 서비스 적용 workflow의 `*-apply` 승인 두 곳이다. PR merge가 그 PR에 적힌 merge 후 운영 작업(bootstrap 적용, GitHub 설정 변경, workflow 실행)의 승인이므로, AI는 따로 묻지 않고 진행한다.
-- 서비스 리소스의 `terraform apply`는 merge 이후 `main`에서 `*-apply` 환경 승인을 통과해 실행한다. `infra/bootstrap`은 PR merge 후 `scripts/bootstrap.sh`로 로컬에서 적용한다. `plan`의 변경 요약이 PR 본문에 적은 범위와 다르거나 정책 테스트가 실패하면 적용하지 않고 사용자에게 묻는다. bootstrap 적용과 로컬 긴급 변경의 결과는 해당 PR 댓글에 남기고 코드에 반영한다.
+- 사람의 확인은 PR merge와 prod 서비스 적용 workflow의 `prod-apply` 승인 두 곳이다. PR merge가 그 PR에 적힌 merge 후 운영 작업(bootstrap 적용, GitHub 설정 변경, workflow 실행)의 승인이므로, AI는 따로 묻지 않고 진행한다.
+- 서비스 리소스의 `terraform apply`는 merge 이후 `main`에서 수동 실행한 `Apply service foundation`으로 실행한다. prod는 `prod-apply` 승인을 통과해야 한다. `infra/bootstrap`은 PR merge 후 `scripts/bootstrap.sh`로 로컬에서 적용한다. `plan`의 변경 요약이 PR 본문에 적은 범위와 다르거나 정책 테스트가 실패하면 적용하지 않고 사용자에게 묻는다. bootstrap 적용과 로컬 긴급 변경의 결과는 해당 PR 댓글에 남기고 코드에 반영한다.
 
 ## 테스트 및 검증
 

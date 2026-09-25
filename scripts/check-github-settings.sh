@@ -2,13 +2,14 @@
 # GitHub 환경과 변수가 AWS 역할 설계와 맞는지 확인한다.
 # 읽기 전용이다. 어긋난 항목을 출력하고 0이 아닌 코드로 끝나며, 아무것도 바꾸지 않는다.
 #
-# 사람의 승인은 배포 결정인 `*-apply`에만 둔다. 저장소 관리자가 한 명이므로 `ban-dal`의
-# 승인을 요구하고 자기 승인을 허용한다(prevent_self_review=false). `*-apply`는 `main`
-# 브랜치에서만 배포한다.
+# 쓰기 역할(aws-fullstack-lab-apply)은 `*-apply` 환경의 토큰만 신뢰하므로, 두 `*-apply`
+# 환경은 `main` 브랜치에서만 배포해야 한다. 그래야 merge된 코드만 쓰기 권한을 받는다.
+# 사람의 승인은 `prod-apply`에만 둔다. 저장소 관리자가 한 명이므로 `ban-dal`의 승인을
+# 요구하고 자기 승인을 허용한다(prevent_self_review=false). preprod는 수동 실행이 결정이다.
 #
 # `*-plan`에는 승인 규칙을 두지 않는다. 같은 저장소 브랜치를 push할 수 있는 사람이
 # 관리자뿐이라, PR plan 승인은 관리자가 자기 코드에 읽기 자격을 주는 확인일 뿐이다.
-# fork PR은 AWS 자격을 받지 않는다. 쓰기 권한자를 추가하면 plan 역할이 state를
+# fork PR은 AWS 자격을 받지 않는다. 쓰기 권한자를 추가하면 plan 역할이 계정 설정과 state를
 # 읽을 수 있으므로 `*-plan`의 필수 승인자와 prevent_self_review를 다시 켠다.
 set -euo pipefail
 
@@ -52,25 +53,21 @@ for name in AWS_ACCOUNT_ID TF_STATE_BUCKET CLIENT_VPN_SERVER_CERTIFICATE_ARN; do
   expect "repository variable $name is absent" "$(repo_variable "$name")" ""
 done
 expect "repository variable AWS_REGION is set" "$([[ -n "$(repo_variable AWS_REGION)" ]] && echo set)" set
-for variable in AWS_PLAN_ROLE_ARN AWS_APPLY_ROLE_ARN; do
-  expect "unused repository variable $variable is absent" "$(repo_variable "$variable")" ""
-done
 for environment in preprod prod; do
   for kind in plan apply; do
     name="$environment-$kind"
     rules="$(gh api "repos/$repo/environments/$name" -q '.protection_rules[] | select(.type == "required_reviewers")')"
     reviewers="$(jq -r '[.reviewers[].reviewer.login] | join(",")' <<<"$rules")"
-    if [[ "$kind" == plan ]]; then
-      expect "$name has no required reviewers" "$reviewers" ""
-    else
+    if [[ "$name" == prod-apply ]]; then
       expect "$name requires $reviewer" "$reviewers" "$reviewer"
       expect "$name allows self-approval" "$(jq -r '.prevent_self_review' <<<"$rules")" false
+    else
+      expect "$name has no required reviewers" "$reviewers" ""
+    fi
+    if [[ "$kind" == apply ]]; then
       branches="$(gh api "repos/$repo/environments/$name/deployment-branch-policies" -q '[.branch_policies[].name] | join(",")')"
       expect "$name deploys from main only" "$branches" main
     fi
-    for variable in AWS_PLAN_ROLE_ARN AWS_APPLY_ROLE_ARN; do
-      expect "unused $name variable $variable is absent" "$(variable_value "repos/$repo/environments/$name/variables/$variable")" ""
-    done
   done
 done
 

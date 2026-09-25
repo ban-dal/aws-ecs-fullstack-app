@@ -12,7 +12,7 @@ Next.js 앱과 AWS 인프라를 한 저장소에서 관리하는 프로젝트다
 | `infra/modules` | AWS 서비스 이름으로 나눈 모듈. 구조와 규칙은 [infra/README.md](infra/README.md) |
 | `.github/workflows/ci.yml` | PR과 main의 앱 타입 검사·빌드 |
 | `.github/workflows/terraform.yml` | PR Terraform fmt·validate, 설정 후 환경별 plan |
-| `.github/workflows/apply-foundation.yml` | main에서 수동 실행하는 환경별 기반 인프라 plan·승인·apply |
+| `.github/workflows/apply-foundation.yml` | main에서 수동 실행하는 환경별 기반 인프라 plan·apply(prod는 승인 1회) |
 | `.github/workflows/image.yml` | PR에서 arm64 이미지 빌드·health 확인, main에서 preprod·prod ECR에 같은 이미지 push |
 | `scripts/` | bootstrap plan·apply와 정책 테스트, GitHub 설정 확인 |
 | `docs/` | 제품, 디자인, 아키텍처, 운영 절차 |
@@ -41,8 +41,8 @@ GitHub Actions는 AWS 장기 키 없이 OIDC 역할로 AWS에 접근한다. 그�
 | Variable | 저장소 | `AWS_REGION` | `ap-northeast-2` (state 버킷과 서비스 리소스의 리전) |
 
 - 계정 ID와 버킷 이름을 변수가 아닌 secret으로 두는 이유는 공개 Actions 로그에서 가리기 위해서다. 같은 이름의 저장소 변수는 두지 않는다.
-- plan·apply workflow는 이전 환경별 역할 변수가 있으면 전환 기간에만 사용한다. bootstrap 변경 적용 후 변수를 삭제하면 계정 ID secret과 공통 역할 이름으로 ARN을 만든다. image workflow는 공통 역할 이름을 사용한다.
-- 환경 보호 규칙의 기대값은 [`scripts/check-github-settings.sh`](scripts/check-github-settings.sh)에 있다. 필수 승인은 `*-apply`에만 둔다.
+- workflow는 계정 ID secret과 공통 역할 이름으로 역할 ARN을 만든다.
+- 환경 보호 규칙의 기대값은 [`scripts/check-github-settings.sh`](scripts/check-github-settings.sh)에 있다. 필수 승인은 `prod-apply`에만 두고, 두 `*-apply` 환경은 `main`에서만 배포한다.
 - secret은 명령줄 인자로 넘기지 말고, 프롬프트에 붙여 넣거나 로컬 파일에서 읽어 넣는다. 셸 기록과 로그에 값을 남기지 않기 위해서다.
 
 ```bash
