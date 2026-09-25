@@ -1,11 +1,9 @@
 # 작업 지침
 
-AI가 기획·디자인·앱·인프라·운영 문서를 함께 유지하는 실험 프로젝트다. 작업 전 `README.md`와 관련 문서를 읽고, 코드와 문서가 어긋나면 같은 변경에서 고친다.
+이 저장소는 AWS 인프라와 운영 절차를 관리한다. Next.js 앱과 앱 배포 workflow는 [앱 저장소](https://github.com/ban-dal/aws-ecs-fullstack-web)에 있다. 작업 전 `README.md`와 관련 문서를 읽고, 코드와 문서가 어긋나면 같은 변경에서 고친다.
 
 ## 문서
 
-- [`docs/product.md`](docs/product.md): 목표, 사용자 동작
-- [`docs/design.md`](docs/design.md): 화면, 접근성
 - [`docs/architecture.md`](docs/architecture.md): 전체 구조
 - [`docs/operations.md`](docs/operations.md): 운영 절차
 - [`infra/README.md`](infra/README.md): Terraform 구조와 규칙
@@ -36,7 +34,6 @@ AI가 기획·디자인·앱·인프라·운영 문서를 함께 유지하는 �
 
 | 변경 | 실행 |
 | --- | --- |
-| 앱 | `pnpm typecheck`, `pnpm build` |
 | Terraform | `terraform fmt -check`, 수정한 루트의 `terraform validate` |
 | `infra/bootstrap` | `scripts/bootstrap.sh plan`의 요약과 정책 테스트 결과를 PR에 쓴다. 정책 의도가 바뀌면 같은 PR에서 `infra/bootstrap/tests/`를 고친다 |
 | GitHub 환경·변수 | `scripts/check-github-settings.sh`. 기대값이 바뀌면 같은 PR에서 스크립트를 고친다 |

@@ -7,12 +7,12 @@
 | 대상 | 적용 주체 | 경로 |
 | --- | --- | --- |
 | 서비스 기반 (`infra/environments/<환경>`: VPC·ECR·preprod VPN 앱·prod HTTPS 앱) | 두 환경 공통 GitHub apply 역할 | [4절](#4-서비스-기반-적용)의 `Apply service foundation` |
-| 앱 이미지 (preprod·prod ECR) | 공통 GitHub image 역할 | [이미지 빌드](#이미지-빌드)의 `Build image` |
+| 앱 이미지·ECS revision | 앱 저장소의 환경별 GitHub 배포 역할 | [앱 배포](#앱-배포)의 `Deploy app` |
 | bootstrap 전체 | 운영 역할 `aws-fullstack-lab-bootstrap-operator` | [2절](#2-bootstrap-변경-적용)의 `scripts/bootstrap.sh` |
 | 콘솔 비밀번호, MFA 장치 | 사용자 본인 | IAM 콘솔 |
 | `bandal.dev`의 `aws` NS 위임 레코드 | 사용자 본인 | Vercel 대시보드([4절의 도메인 위임](#도메인-위임)) |
 
-PR CI는 apply하지 않는다. merge만으로 배포가 시작되지 않는다.
+인프라 PR CI는 apply하지 않는다. 인프라 main merge만으로 배포가 시작되지 않는다. 앱 저장소의 preprod push는 자동 배포된다.
 
 ## 1. 로컬 인증
 
@@ -97,11 +97,13 @@ PR에서는 두 환경의 plan 요약과 바뀐 인프라 파일이 PR 댓글 �
 
 기본 AZ는 `ap-northeast-2a`, `ap-northeast-2c`다. 계정에서 쓸 수 없으면 두 환경의 `availability_zones`를 같은 순서로 지정한다. 적용 후 AZ 순서를 바꾸면 서브넷이 교체된다.
 
-### 이미지 빌드
+### 앱 배포
 
-`Build image`(`.github/workflows/image.yml`)는 앱 파일이 바뀐 PR에서 arm64 이미지를 빌드하고, 컨테이너를 띄워 `/api/health`를 확인한다. main에 merge되면 같은 이미지를 commit SHA 태그로 preprod·prod 저장소에 올리고, 실행 요약에 태그·digest·취약점 스캔 결과 개수를 남긴다. 저장소 태그는 덮어쓸 수 없으므로, 같은 태그가 있으면 건너뛴다. 앱 파일 변경 없이 다시 올리려면 main에서 workflow를 수동 실행한다. 저장소 정책이 image 역할 외의 push를 거부하므로 로컬에서는 올리지 않는다.
+[앱 저장소](https://github.com/ban-dal/aws-ecs-fullstack-web)의 PR에서는 타입 검사·앱 빌드·arm64 컨테이너 health를 확인한다. `preprod` 브랜치의 push마다 `Deploy app`이 이미지를 commit SHA 태그로 preprod ECR에 올리고 ECS 서비스를 갱신한다. `main`에서 같은 workflow를 수동 실행하면 `prod-deploy` 환경 승인 후 prod 이미지 빌드·push·ECS 배포·공개 HTTPS health 확인이 이어진다. prod는 preprod에서 검증한 코드를 main에 반영한 뒤 실행한다. 이미지 태그는 환경별로 불변이며 해당 환경 역할만 push할 수 있다.
 
-prod 앱 이미지를 승격할 때는 main의 `Build image` 성공과 prod 저장소 push를 확인하고, `infra/environments/prod/main.tf`의 `image_tag`를 해당 main SHA로 바꾸는 PR을 연다. prod plan에서 웹 태스크 정의의 컨테이너 변경에 따른 선생성 교체와 ECS 서비스 수정만 확인한다. merge 후 [서비스 적용 절차](#4-서비스-기반-적용)에서 prod를 실행하고, [prod 점검](#prod-공개-https-앱)을 한다. 되돌릴 때는 이전 이미지 태그로 PR을 열어 같은 절차를 밟는다.
+최초 전환 순서는 인프라 bootstrap IAM 적용 → 두 환경 `Apply service foundation`으로 ECR 정책 갱신 → 앱 저장소의 `preprod` 브랜치 생성·push다. prod 앱은 이후 main의 수동 실행으로 배포한다. 서비스가 중지돼 태스크 수가 기대값과 다르거나 이미 배포 중이면 앱 workflow는 변경하지 않고 실패한다. Terraform은 신규 생성용 task definition을 유지하지만 서비스의 활성 revision은 앱 workflow가 선택하므로, 기반 인프라 apply가 앱 버전을 되돌리지 않는다. 작업 중인 기반 apply와 앱 배포는 동시에 실행하지 않는다.
+
+앱 롤백은 앱 저장소에서 이전 코드를 새 commit으로 되돌려 해당 환경 workflow를 다시 실행한다. ECR은 최근 5개 이미지만 유지하므로 오래된 SHA의 재배포를 보장하지 않는다. preprod는 호스트 한 대의 고정 포트 때문에 교체 중 잠시 응답이 끊길 수 있다.
 
 ### preprod 앱과 AWS Client VPN 접속
 
@@ -118,7 +120,7 @@ prod 앱 이미지를 승격할 때는 main의 `Build image` 성공과 prod 저�
 
 `aws.bandal.dev`는 prod의 ALB를 가리킨다. ACM은 같은 공개 Route 53 영역에 DNS 검증 레코드를 남겨 자동 갱신한다. 첫 prod 태스크는 preprod에 지정된 이미지 태그를 사용한다.
 
-1. [도메인 위임](#도메인-위임)과 prod ECR에 해당 이미지 태그가 있는지 확인한다. [이미지 빌드](#이미지-빌드)의 성공 실행 기록에서 prod 저장소 push 결과를 확인한다.
+1. [도메인 위임](#도메인-위임)과 prod ECR에 신규 생성용 이미지 태그가 있는지 확인한다.
 2. PR의 prod plan에 ACM 인증서·검증 레코드, ALB·리스너·대상 그룹, ECS 호스트 두 대·서비스, Route 53 A alias 생성만 있는지 확인한다. 비용은 [6절](#6-비용-관리)을 본다.
 3. merge 후 `main`에서 `Apply service foundation`의 **prod**를 선택한다. plan을 검토하고 `prod-apply` 승인을 완료한다. 인증서 검증과 두 호스트의 시작 때문에 적용이 몇 분 걸릴 수 있다.
 4. 적용 후 `scripts/prod-service.sh check`를 실행한다. ECS 태스크와 ALB 정상 대상이 각각 2/2인지, `https://aws.bandal.dev/api/health`가 `prod`를 반환하는지 확인한다. HTTP는 HTTPS로 이동해야 한다.

@@ -1,5 +1,5 @@
-# 계정의 IAM 접근 경로를 한곳에서 관리한다. 사람 1명, GitHub 작업 3종, ECS 서비스 2종이다.
-# GitHub와 ECS 역할은 preprod·prod가 공유한다. 환경 간 IAM 격리는 제공하지 않는다.
+# 계정의 IAM 접근 경로를 한곳에서 관리한다. 인프라와 앱 저장소의 OIDC 역할은 분리한다.
+# 앱 배포 역할은 각 환경의 ECR 저장소·ECS 서비스만 변경한다.
 locals {
   repository_arns = [for environment in var.environments :
   "arn:aws:ecr:${var.region}:${var.account_id}:repository/aws-fullstack-lab-${environment}-web"]
@@ -7,16 +7,17 @@ locals {
   "arn:aws:logs:${var.region}:${var.account_id}:log-group:aws-fullstack-lab-${environment}-*"]
 
   github_subjects = {
-    plan  = [for environment in var.environments : "${var.repository_subject}:environment:${environment}-plan"]
-    apply = [for environment in var.environments : "${var.repository_subject}:environment:${environment}-apply"]
-    image = ["${var.repository_subject}:ref:refs/heads/main"]
+    plan        = [for environment in var.environments : "${var.repository_subject}:environment:${environment}-plan"]
+    apply       = [for environment in var.environments : "${var.repository_subject}:environment:${environment}-apply"]
+    app-preprod = ["${var.app_repository_subject}:ref:refs/heads/preprod"]
+    app-prod    = ["${var.app_repository_subject}:environment:prod-deploy"]
   }
 
   host_role_arn      = "arn:aws:iam::${var.account_id}:role/aws-fullstack-lab-ecs-host"
   execution_role_arn = "arn:aws:iam::${var.account_id}:role/aws-fullstack-lab-ecs-task-execution"
 }
 
-# OIDC subject는 immutable repository ID와 GitHub 환경 또는 main 브랜치로 제한한다.
+# OIDC subject는 각 저장소의 immutable ID와 GitHub 환경 또는 배포 브랜치로 제한한다.
 resource "aws_iam_openid_connect_provider" "github" {
   url            = "https://token.actions.githubusercontent.com"
   client_id_list = ["sts.amazonaws.com"]
@@ -125,8 +126,11 @@ data "aws_iam_policy_document" "apply" {
   }
 }
 
-# image는 main 브랜치에서만 수임하고, 두 저장소에 이미지 push만 할 수 있다.
-data "aws_iam_policy_document" "image" {
+# 앱 저장소 역할은 환경별 저장소에 이미지를 올리고 해당 ECS 서비스만 갱신한다.
+# prod-deploy 환경은 앱 저장소에서 main 전용·승인 필수로 설정한다.
+data "aws_iam_policy_document" "app" {
+  for_each = toset(["preprod", "prod"])
+
   statement {
     actions   = ["ecr:GetAuthorizationToken"]
     resources = ["*"]
@@ -137,18 +141,40 @@ data "aws_iam_policy_document" "image" {
       "ecr:DescribeImageScanFindings", "ecr:DescribeImages", "ecr:GetDownloadUrlForLayer",
       "ecr:InitiateLayerUpload", "ecr:PutImage", "ecr:UploadLayerPart",
     ]
-    resources = local.repository_arns
+    resources = ["arn:aws:ecr:${var.region}:${var.account_id}:repository/aws-fullstack-lab-${each.key}-web"]
+  }
+  statement {
+    actions   = ["ecs:DescribeServices", "ecs:UpdateService"]
+    resources = ["arn:aws:ecs:${var.region}:${var.account_id}:service/aws-fullstack-lab-${each.key}/web"]
+  }
+  statement {
+    actions   = ["ecs:DescribeTaskDefinition"]
+    resources = ["*"]
+  }
+  statement {
+    actions   = ["ecs:RegisterTaskDefinition", "ecs:TagResource"]
+    resources = ["arn:aws:ecs:${var.region}:${var.account_id}:task-definition/aws-fullstack-lab-${each.key}-web:*"]
+  }
+  statement {
+    actions   = ["iam:PassRole"]
+    resources = [local.execution_role_arn]
+    condition {
+      test     = "StringEquals"
+      variable = "iam:PassedToService"
+      values   = ["ecs-tasks.amazonaws.com"]
+    }
   }
 }
 
 resource "aws_iam_role_policy" "github" {
   for_each = local.github_subjects
-  name     = { plan = "terraform-plan-read", apply = "terraform-foundation-apply", image = "ecr-image-push" }[each.key]
+  name     = { plan = "terraform-plan-read", apply = "terraform-foundation-apply", app-preprod = "preprod-app-deploy", app-prod = "prod-app-deploy" }[each.key]
   role     = aws_iam_role.github[each.key].name
   policy = {
-    plan  = data.aws_iam_policy_document.plan.json
-    apply = data.aws_iam_policy_document.apply.json
-    image = data.aws_iam_policy_document.image.json
+    plan        = data.aws_iam_policy_document.plan.json
+    apply       = data.aws_iam_policy_document.apply.json
+    app-preprod = data.aws_iam_policy_document.app["preprod"].json
+    app-prod    = data.aws_iam_policy_document.app["prod"].json
   }[each.key]
 }
 

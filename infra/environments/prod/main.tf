@@ -43,7 +43,7 @@ module "ecr_repository" {
   source = "../../modules/ecr-repository"
 
   name          = "${local.name_prefix}-web"
-  push_role_arn = "arn:aws:iam::${var.expected_account_id}:role/aws-fullstack-lab-image"
+  push_role_arn = "arn:aws:iam::${var.expected_account_id}:role/aws-fullstack-lab-app-prod"
   tags          = local.tags
 }
 
@@ -92,7 +92,7 @@ module "web" {
   account_id     = var.expected_account_id
   region         = var.aws_region
   repository_url = module.ecr_repository.repository_url
-  # 요청 관측 대시보드가 포함된 main 이미지다. Build image 실행 성공 후 적용한다.
+  # Terraform 신규 생성 시 사용하는 seed 이미지. 이후 서비스 revision은 앱 저장소 CI가 관리한다.
   image_tag        = "f98af60d54ad85c79c41bfb2835a25b66d0c833a"
   target_group_arn = module.alb.target_group_arn
   tags             = local.tags

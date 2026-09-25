@@ -54,7 +54,7 @@ module "ecr_repository" {
   source = "../../modules/ecr-repository"
 
   name          = "${local.name_prefix}-web"
-  push_role_arn = "arn:aws:iam::${var.expected_account_id}:role/aws-fullstack-lab-image"
+  push_role_arn = "arn:aws:iam::${var.expected_account_id}:role/aws-fullstack-lab-app-preprod"
   tags          = local.tags
 }
 
@@ -83,7 +83,7 @@ module "web" {
   account_id     = var.expected_account_id
   region         = var.aws_region
   repository_url = module.ecr_repository.repository_url
-  # 첫 배포에 사용할 이미지. 새 앱 버전은 별도 배포 흐름을 추가할 때 갱신한다.
+  # Terraform 신규 생성 시 사용하는 seed 이미지. 이후 서비스 revision은 앱 저장소 CI가 관리한다.
   image_tag = "757ff359a5bb83c9b5dab18767d5d80f8e876db4"
   tags      = local.tags
 

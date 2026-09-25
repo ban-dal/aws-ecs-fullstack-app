@@ -5,7 +5,7 @@ variable "name" {
 
 variable "push_role_arn" {
   type        = string
-  description = "이미지를 push할 수 있는 유일한 역할. bootstrap의 image 역할이다."
+  description = "이미지를 push할 수 있는 유일한 환경별 앱 배포 역할 ARN."
 }
 
 variable "tags" {

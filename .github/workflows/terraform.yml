@@ -3,6 +3,12 @@ name: Terraform
 on:
   pull_request:
     branches: [main]
+  push:
+    branches: [main]
+    paths:
+      - infra/**
+      - scripts/**
+      - .github/workflows/terraform.yml
 
 permissions:
   contents: read
@@ -40,7 +46,7 @@ jobs:
   plan:
     # fork PR은 AWS 자격을 받지 않는다. 같은 저장소의 PR은 승인 없이 읽기 전용 plan 역할로
     # 실행된다. PR 브랜치 코드가 받는 역할이므로 쓰기 권한을 주지 않는다(infra/modules/iam).
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     needs: validate
     runs-on: ubuntu-latest
     strategy:
@@ -107,7 +113,7 @@ jobs:
     # PR 코드를 checkout하지 않고 plan 작업이 남긴 요약만 읽어 댓글을 쓴다. 댓글 쓰기
     # 권한이 PR 브랜치 코드에 닿지 않게 하기 위해서다.
     needs: plan
-    if: always() && needs.plan.result != 'skipped'
+    if: always() && github.event_name == 'pull_request' && needs.plan.result != 'skipped'
     runs-on: ubuntu-latest
     permissions:
       contents: read

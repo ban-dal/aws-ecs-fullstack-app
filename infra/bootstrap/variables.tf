@@ -29,6 +29,17 @@ variable "github_repository_subject" {
   }
 }
 
+variable "app_repository_subject" {
+  type        = string
+  description = "앱 저장소 GitHub OIDC sub 접두사. immutable owner/repository ID를 사용한다."
+  default     = "repo:ban-dal@46153202/aws-ecs-fullstack-web@1386828063"
+
+  validation {
+    condition     = startswith(var.app_repository_subject, "repo:")
+    error_message = "app_repository_subject는 repo:로 시작해야 합니다."
+  }
+}
+
 variable "alert_email" {
   type        = string
   default     = null
