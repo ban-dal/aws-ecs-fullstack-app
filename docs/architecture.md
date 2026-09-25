@@ -50,8 +50,7 @@ flowchart LR
   AppCheck --> Preprod[앱 preprod push]
   Preprod --> PreprodDeploy[preprod 이미지 빌드·ECS 자동 배포]
   AppCheck --> AppMain[앱 main]
-  AppMain --> ProdDispatch[수동 Deploy app]
-  ProdDispatch --> ProdApproval[prod-deploy 승인]
+  AppMain --> ProdApproval[main push로 prod-deploy 승인 대기]
   ProdApproval --> ProdDeploy[prod 이미지 빌드·ECS 배포]
 ```
 

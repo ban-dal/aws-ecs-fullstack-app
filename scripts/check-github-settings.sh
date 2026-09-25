@@ -75,7 +75,7 @@ done
 # 앱 저장소는 preprod 브랜치 토큰과 main 전용 prod-deploy 승인 환경으로 배포한다.
 expect "app repository secret AWS_ACCOUNT_ID exists" "$(exists "repos/$app_repo/actions/secrets/AWS_ACCOUNT_ID")" yes
 expect "app repository variable AWS_ACCOUNT_ID is absent" "$(variable_value "repos/$app_repo/actions/variables/AWS_ACCOUNT_ID")" ""
-expect "app repository variable AWS_REGION is set" "$([[ -n "$(variable_value "repos/$app_repo/actions/variables/AWS_REGION")" ]] && echo set)" set
+expect "app repository variable AWS_REGION is absent" "$(variable_value "repos/$app_repo/actions/variables/AWS_REGION")" ""
 app_rules="$(gh api "repos/$app_repo/environments/prod-deploy" -q '.protection_rules[] | select(.type == "required_reviewers")')"
 expect "app prod-deploy requires $reviewer" "$(jq -r '[.reviewers[].reviewer.login] | join(",")' <<<"$app_rules")" "$reviewer"
 expect "app prod-deploy allows self-approval" "$(jq -r '.prevent_self_review' <<<"$app_rules")" false
