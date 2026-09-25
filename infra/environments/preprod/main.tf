@@ -34,7 +34,6 @@ module "vpc_security_groups" {
   name_prefix       = local.name_prefix
   vpc_id            = module.vpc.vpc_id
   vpc_cidr          = module.vpc.cidr_block
-  enable_wireguard  = true
   enable_client_vpn = true
   tags              = local.tags
 }
@@ -68,14 +67,11 @@ module "ecs_cluster" {
 module "ecs_host" {
   source = "../../modules/ec2-ecs-host"
 
-  name_prefix      = local.name_prefix
-  cluster_name     = module.ecs_cluster.name
-  public_subnet_id = module.vpc.public_subnet_ids[var.availability_zones[0]]
-  security_group_ids = [
-    module.vpc_security_groups.ecs_host_security_group_id,
-    module.vpc_security_groups.wireguard_security_group_id,
-  ]
-  tags = local.tags
+  name_prefix        = local.name_prefix
+  cluster_name       = module.ecs_cluster.name
+  public_subnet_id   = module.vpc.public_subnet_ids[var.availability_zones[0]]
+  security_group_ids = [module.vpc_security_groups.ecs_host_security_group_id]
+  tags               = local.tags
 }
 
 module "web" {

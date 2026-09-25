@@ -1,5 +1,5 @@
 # 단일 AZ의 ECS 호스트다. NAT와 ALB 없이 ECR·SSM에 나가야 하므로 공개 서브넷에
-# 명시적으로 IPv4를 할당한다. 보안 그룹은 WireGuard UDP만 공개한다.
+# 명시적으로 IPv4를 할당한다. 공개 수신은 열지 않고 앱은 AWS Client VPN에서만 받는다.
 # ARM64 ECS AMI는 EC2 이미지 조회로 찾는다.
 data "aws_ami" "ecs" {
   most_recent = true
@@ -49,25 +49,10 @@ resource "aws_launch_template" "this" {
     }
   }
 
-  # 서버 개인 키는 인스턴스에서 생성해 EBS에만 둔다. user data와 Terraform state에는
-  # 개인 키나 클라이언트 설정을 넣지 않는다. 호스트 교체 시 client peer를 다시 등록한다.
   user_data = base64encode(<<-EOT
     #!/bin/bash
     set -euo pipefail
     echo 'ECS_CLUSTER=${var.cluster_name}' >> /etc/ecs/ecs.config
-    dnf install -y wireguard-tools
-    install -d -m 0700 /etc/wireguard
-    wg genkey > /etc/wireguard/server.key
-    chmod 0600 /etc/wireguard/server.key
-    wg pubkey < /etc/wireguard/server.key > /etc/wireguard/server.pub
-    cat > /etc/wireguard/wg0.conf <<EOF
-    [Interface]
-    Address = 10.62.0.1/24
-    ListenPort = 51820
-    PrivateKey = $(cat /etc/wireguard/server.key)
-    EOF
-    chmod 0600 /etc/wireguard/wg0.conf
-    systemctl enable --now wg-quick@wg0
   EOT
   )
 
@@ -94,6 +79,15 @@ resource "aws_autoscaling_group" "this" {
   launch_template {
     id      = aws_launch_template.this.id
     version = aws_launch_template.this.latest_version
+  }
+
+  # launch template이 바뀌면(AMI, user data, 보안 그룹) 실행 중인 호스트도 교체한다.
+  # 호스트가 한 대라 먼저 내리고 새로 올리므로 교체하는 동안 앱이 끊긴다.
+  instance_refresh {
+    strategy = "Rolling"
+    preferences {
+      min_healthy_percentage = 0
+    }
   }
 
   dynamic "tag" {

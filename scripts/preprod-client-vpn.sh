@@ -2,6 +2,8 @@
 # AWS Client VPN의 로컬 CA·기기 인증서를 만들고, 서버 인증서만 ACM에 등록한다.
 # 개인 키와 클라이언트 .ovpn은 이 Mac의 사용자 설정 디렉터리에만 둔다.
 # prepare는 GitHub plan/apply가 사용할 ACM ARN을 repository secret으로 설정한다.
+# suspend는 preprod 태스크·호스트를 0대로 줄이고 VPN 대상 서브넷 연결을 해제한다.
+# 다시 쓸 때는 preprod 적용 workflow가 선언값대로 모두 되돌린다.
 set -euo pipefail
 umask 077
 
@@ -101,17 +103,23 @@ if [[ "$command" == config ]]; then
 fi
 
 if [[ "$command" == suspend ]]; then
+  aws ecs update-service --region "$region" --cluster aws-fullstack-lab-preprod-cluster --service web \
+    --desired-count 0 --query 'service.desiredCount' --output text >/dev/null
+  aws ecs wait services-stable --region "$region" --cluster aws-fullstack-lab-preprod-cluster --services web
+  aws autoscaling update-auto-scaling-group --region "$region" --auto-scaling-group-name aws-fullstack-lab-preprod-ecs \
+    --min-size 0 --desired-capacity 0
+  echo "preprod 태스크와 호스트를 0대로 줄였습니다. EBS와 공개 IP는 호스트 종료와 함께 해제됩니다."
   association_id="$(aws ec2 describe-client-vpn-target-networks --region "$region" \
     --client-vpn-endpoint-id "$endpoint_id" \
     --query 'ClientVpnTargetNetworks[0].AssociationId' --output text)"
   if [[ -z "$association_id" || "$association_id" == None ]]; then
     echo "연결된 대상 서브넷이 없습니다."
-    exit 0
+  else
+    aws ec2 disassociate-client-vpn-target-network --region "$region" \
+      --client-vpn-endpoint-id "$endpoint_id" --association-id "$association_id" >/dev/null
+    echo "대상 서브넷 연결 해제를 시작했습니다. 완료되면 VPN 접속과 엔드포인트 연결 시간 과금이 멈춥니다."
   fi
-  aws ec2 disassociate-client-vpn-target-network --region "$region" \
-    --client-vpn-endpoint-id "$endpoint_id" --association-id "$association_id" >/dev/null
-  echo "대상 서브넷 연결 해제를 시작했습니다. 완료되면 VPN 접속과 엔드포인트 연결 시간 과금이 멈춥니다."
-  echo "Terraform state와 차이가 생기므로 재개할 때는 preprod 적용 workflow의 새 plan을 검토하세요."
+  echo "다시 쓸 때는 preprod 적용 workflow의 새 plan에서 서브넷 연결·호스트·태스크 복구를 확인하고 적용하세요."
   exit 0
 fi
 

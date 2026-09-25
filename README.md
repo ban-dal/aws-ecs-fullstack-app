@@ -64,7 +64,7 @@ terraform -chdir=infra/bootstrap output -raw state_bucket | gh secret set TF_STA
 
 ## 다음 단계
 
-preprod의 AWS Client VPN 인증서 접속을 검증한 뒤 기존 WireGuard를 제거한다. 이후 prod의 ALB·ACM·Route 53 공개 HTTPS와 이미지 승격 흐름을 추가한다. S3·Lambda 예제는 비용을 따로 검토한다.
+prod의 ALB·ACM·Route 53 공개 HTTPS와 이미지 승격 흐름을 추가한다. S3·Lambda 예제는 비용을 따로 검토한다.
 
 ## 문서
 

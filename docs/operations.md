@@ -110,9 +110,7 @@ PR에서는 두 환경의 plan 요약과 바뀐 인프라 파일이 PR 댓글 �
 3. `scripts/preprod-client-vpn.sh config`를 실행해 `preprod.ovpn`을 만든다. AWS VPN Client에 이 파일을 가져와 연결한다. `.ovpn`에도 클라이언트 개인 키가 있으므로 공유하지 않는다.
 4. `scripts/preprod-client-vpn.sh check`를 실행한다. ECS desired/running이 `1/1`, rollout이 `COMPLETED`, health 응답이 `{"status":"ok","environment":"preprod"}`인지 확인하고 스크립트가 출력한 사설 IP 주소의 페이지를 브라우저에서 연다. 호스트가 교체되면 사설 IP가 바뀌므로 `check`에서 현재 주소를 다시 확인한다.
 
-기존 WireGuard는 AWS Client VPN 접속 검증이 끝날 때까지 임시로 유지한다. 그동안의 `scripts/preprod-access.sh enroll|revoke|check`는 WireGuard 전용이다. 관리형 VPN 접속을 확인한 다음 별도 plan에서 공개 UDP 규칙과 호스트의 WireGuard 구성을 제거한다.
-
-장기간 사용하지 않을 때는 VPN 앱에서 연결을 끊고 `scripts/preprod-client-vpn.sh suspend`로 대상 서브넷 연결을 해제한다. 연결 시간 과금은 해제 완료 후 멈추지만 Terraform state와 차이가 생긴다. 다시 사용할 때는 preprod 적용 workflow의 새 plan에서 서브넷 연결 재생성을 확인하고 적용한다. ECS 호스트도 함께 중지하려면 `scripts/preprod-access.sh stop`을 사용한다.
+장기간 사용하지 않을 때는 VPN 앱에서 연결을 끊고 `scripts/preprod-client-vpn.sh suspend`를 실행한다. 태스크와 호스트를 0대로 줄이고 대상 서브넷 연결을 해제하므로 Terraform state와 차이가 생긴다. 다시 사용할 때는 preprod 적용 workflow의 새 plan에서 서브넷 연결 재생성과 호스트·태스크 1대 복구를 확인하고 적용한다.
 
 ### 도메인 위임
 
@@ -171,12 +169,12 @@ PR에서는 두 환경의 plan 요약과 바뀐 인프라 파일이 PR 댓글 �
 - Budget([`modules/budgets`](../infra/modules/budgets/main.tf))은 이메일로 알리기만 하고 지출을 멈추지 않는다.
 - IAM, VPC, Internet Gateway 자체는 무료다. S3 state 저장·요청과 ECR 이미지 저장·전송은 사용량에 따라 과금된다. state 버킷의 이전 버전은 lifecycle 규칙으로 만료된다.
 - Route 53 호스팅 영역은 월 $0.50이다. 퍼블릭 IPv4, EC2, ALB도 과금 대상이다. 추가하는 PR에서 서울 리전 요금으로 비용을 계산하고, 공개 앱은 기본적으로 끈다. NAT Gateway는 쓰지 않는다.
-- preprod 호스트는 `t4g.small` 1대, 30 GiB gp3 EBS, 공개 IPv4 1개와 CloudWatch 로그를 쓴다. 24시간 가동 시 EC2 정가 약 $15/월, IPv4 약 $3.65/월, EBS 약 $3~4/월에 로그·전송량이 더해진다. AWS의 `t4g.small` 월 750시간 체험이 2026년 말까지 해당 계정에 적용되면 EC2 사용액은 줄지만, 실제 Free plan 크레딧·체험 잔량은 Billing에서 확인한다. WireGuard에는 별도 AWS VPN 시간당 요금이 없다.
-- preprod를 쉬게 할 때 `scripts/preprod-access.sh stop`은 ECS 태스크와 Auto Scaling 호스트를 0대로 줄인다. EBS와 공개 IP는 호스트 종료와 함께 해제되고, 로그·ECR 저장 비용은 남는다. `start`로 다시 올린 뒤 `enroll`을 다시 한다. 이 일시 중지는 Terraform 선언값(1대)과 차이를 만드므로 다음 `Apply service foundation` plan은 호스트 재시작을 표시한다.
+- preprod 호스트는 `t4g.small` 1대, 30 GiB gp3 EBS, 공개 IPv4 1개와 CloudWatch 로그를 쓴다. 24시간 가동 시 EC2 정가 약 $15/월, IPv4 약 $3.65/월, EBS 약 $3~4/월에 로그·전송량이 더해진다. AWS의 `t4g.small` 월 750시간 체험이 2026년 말까지 해당 계정에 적용되면 EC2 사용액은 줄지만, 실제 Free plan 크레딧·체험 잔량은 Billing에서 확인한다.
+- preprod를 쉬게 할 때 `scripts/preprod-client-vpn.sh suspend`는 VPN 연결 시간 과금을 멈추고 EBS와 공개 IP도 호스트 종료와 함께 해제한다. 로그·ECR 저장 비용은 남는다.
 
 ## 7. 종료·롤백·복구
 
-- preprod 일시 중지: `scripts/preprod-access.sh stop`으로 호스트와 태스크를 0대로 줄인다. 다시 접속할 때는 `start`, `enroll`을 실행한다.
+- preprod 일시 중지: `scripts/preprod-client-vpn.sh suspend`. 다시 쓸 때는 preprod 적용 workflow를 실행한다.
 - 서비스 기반 완전 종료: ECS·ALB 등 종속 리소스를 먼저 없앤다. ECR은 `force_delete=false`이므로 이미지를 비운 뒤 삭제한다. 현재 workflow에는 destroy 경로가 없으므로 환경별 `terraform plan -destroy`를 검토하는 별도 절차를 PR로 만든다.
 - bootstrap 롤백: 되돌리는 PR을 merge한 뒤 [2절](#2-bootstrap-변경-적용)로 적용하고, 바뀐 GitHub 변수를 되돌린다.
 - Terraform 오류: 마지막 성공 state의 S3 버전을 확인하고 state를 손으로 고치지 않는다. `terraform plan`으로 선언과 실제의 차이를 먼저 본다.
