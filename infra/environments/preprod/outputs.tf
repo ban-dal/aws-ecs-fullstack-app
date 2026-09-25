@@ -34,10 +34,6 @@ output "ecs_autoscaling_group_name" {
   value = module.ecs_host.autoscaling_group_name
 }
 
-output "vpn_http_health_url" {
-  value = "http://10.62.0.1:3000/api/health"
-}
-
 output "client_vpn_endpoint_id" {
   value = module.client_vpn.endpoint_id
 }

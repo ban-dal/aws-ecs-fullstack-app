@@ -15,7 +15,7 @@ infra/
 | [`budgets`](modules/budgets/main.tf) | 월간 비용 알림 | bootstrap |
 | [`ecr-registry`](modules/ecr-registry/main.tf) | 레지스트리(계정) 단위 push 스캔 | bootstrap |
 | [`ecr-repository`](modules/ecr-repository/main.tf) | 환경별 이미지 저장소와 lifecycle | preprod, prod |
-| [`ec2-ecs-host`](modules/ec2-ecs-host/main.tf) | 단일 ECS 호스트와 WireGuard 서버 | preprod |
+| [`ec2-ecs-host`](modules/ec2-ecs-host/main.tf) | 단일 ECS 호스트 | preprod |
 | [`ec2-client-vpn`](modules/ec2-client-vpn/main.tf) | 인증서 기반 AWS Client VPN 엔드포인트와 단일 서브넷 연결 | preprod |
 | [`ecs-cluster`](modules/ecs-cluster/main.tf) | ECS 클러스터 | preprod |
 | [`ecs-preprod-web`](modules/ecs-preprod-web/main.tf) | 앱 태스크·서비스·로그 | preprod |
