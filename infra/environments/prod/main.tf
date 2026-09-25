@@ -103,9 +103,9 @@ module "web" {
 module "dns" {
   source = "../../modules/route53-alias"
 
+  # DNS는 ALB 주소에만 의존한다. 웹 서비스까지 묶으면 이미지 교체 때
+  # zone data 조회가 apply로 미뤄져 alias 레코드가 불필요하게 교체된다.
   domain_name  = local.domain_name
   alb_dns_name = module.alb.dns_name
   alb_zone_id  = module.alb.zone_id
-
-  depends_on = [module.web]
 }
