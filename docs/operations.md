@@ -99,7 +99,7 @@ PR에서는 두 환경의 plan 요약과 바뀐 인프라 파일이 PR 댓글 �
 
 ### 이미지 빌드
 
-`Build image`(`.github/workflows/image.yml`)는 앱 파일이 바뀐 PR에서 arm64 이미지를 빌드하고, 컨테이너를 띄워 `/api/health`를 확인한다. main에 merge되면 같은 이미지를 commit SHA 태그로 preprod·prod 저장소에 올리고, 실행 요약에 태그·digest·취약점 스캔 결과 개수를 남긴다. 저장소 태그는 덮어쓸 수 없으므로, 같은 태그가 있으면 건너뛴다. 앱 파일 변경 없이 다시 올리려면 main에서 workflow를 수동 실행한다.
+`Build image`(`.github/workflows/image.yml`)는 앱 파일이 바뀐 PR에서 arm64 이미지를 빌드하고, 컨테이너를 띄워 `/api/health`를 확인한다. main에 merge되면 같은 이미지를 commit SHA 태그로 preprod·prod 저장소에 올리고, 실행 요약에 태그·digest·취약점 스캔 결과 개수를 남긴다. 저장소 태그는 덮어쓸 수 없으므로, 같은 태그가 있으면 건너뛴다. 앱 파일 변경 없이 다시 올리려면 main에서 workflow를 수동 실행한다. 저장소 정책이 image 역할 외의 push를 거부하므로 로컬에서는 올리지 않는다.
 
 ### preprod 앱과 AWS Client VPN 접속
 

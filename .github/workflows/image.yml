@@ -14,10 +14,9 @@ on:
       - pnpm-workspace.yaml
       - .npmrc
       - .github/workflows/image.yml
-      - scripts/push-image.sh
   push:
     branches: [main]
-    # workflow·push 스크립트 변경만으로는 이미지를 올리지 않는다. 필요하면 main에서 수동 실행한다.
+    # workflow 변경만으로는 이미지를 올리지 않는다. 필요하면 main에서 수동 실행한다.
     paths:
       - apps/**
       - package.json
@@ -77,9 +76,33 @@ jobs:
         with:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/aws-fullstack-lab-image
           aws-region: ${{ env.AWS_REGION }}
+      # 저장소는 태그를 덮어쓸 수 없으므로(IMMUTABLE) 같은 태그가 이미 있으면 올리지 않는다.
+      # 그래서 다시 실행해도 안전하다. push 스캔은 레지스트리 설정이 맡고 결과 개수만 요약에 남긴다.
       - if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-        name: Push to preprod
-        run: scripts/push-image.sh preprod "web:$IMAGE_TAG"
-      - if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-        name: Push to prod
-        run: scripts/push-image.sh prod "web:$IMAGE_TAG"
+        name: Push to preprod and prod
+        run: |
+          registry="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
+          aws ecr get-login-password | docker login --username AWS --password-stdin "$registry"
+          for environment in preprod prod; do
+            repository="aws-fullstack-lab-$environment-web"
+            if aws ecr describe-images --repository-name "$repository" --image-ids "imageTag=$IMAGE_TAG" >/dev/null 2>&1; then
+              echo "$repository:$IMAGE_TAG already exists; skipping push"
+            else
+              docker tag "web:$IMAGE_TAG" "$registry/$repository:$IMAGE_TAG"
+              docker push "$registry/$repository:$IMAGE_TAG"
+            fi
+            digest="$(aws ecr describe-images --repository-name "$repository" --image-ids "imageTag=$IMAGE_TAG" \
+              --query 'imageDetails[0].imageDigest' --output text)"
+            findings="scan pending"
+            if aws ecr wait image-scan-complete --repository-name "$repository" --image-id "imageTag=$IMAGE_TAG" 2>/dev/null; then
+              findings="$(aws ecr describe-image-scan-findings --repository-name "$repository" --image-id "imageTag=$IMAGE_TAG" \
+                --query 'imageScanFindings.findingSeverityCounts' --output json \
+                | jq -r 'to_entries | map("\(.key)=\(.value)") | join(" ") | if . == "" then "no findings" else . end')"
+            fi
+            {
+              echo "### $environment"
+              echo "- image: \`$repository:$IMAGE_TAG\`"
+              echo "- digest: \`$digest\`"
+              echo "- scan: $findings"
+            } >> "$GITHUB_STEP_SUMMARY"
+          done

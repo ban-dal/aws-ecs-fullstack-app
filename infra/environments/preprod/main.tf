@@ -53,8 +53,9 @@ module "client_vpn" {
 module "ecr_repository" {
   source = "../../modules/ecr-repository"
 
-  name = "${local.name_prefix}-web"
-  tags = local.tags
+  name          = "${local.name_prefix}-web"
+  push_role_arn = "arn:aws:iam::${var.expected_account_id}:role/aws-fullstack-lab-image"
+  tags          = local.tags
 }
 
 module "ecs_cluster" {
