@@ -127,7 +127,7 @@ data "aws_iam_policy_document" "apply" {
 }
 
 # 앱 저장소 역할은 환경별 저장소에 이미지를 올리고 해당 ECS 서비스만 갱신한다.
-# prod-deploy 환경은 앱 저장소에서 main 전용·승인 필수로 설정한다.
+# prod-deploy 환경은 앱 저장소에서 main 전용으로 설정한다.
 data "aws_iam_policy_document" "app" {
   for_each = toset(["preprod", "prod"])
 
