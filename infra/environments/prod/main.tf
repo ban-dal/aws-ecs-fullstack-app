@@ -8,7 +8,8 @@ locals {
   environment = "prod"
   name_prefix = "aws-fullstack-lab-${local.environment}"
   # 두 환경의 VPC CIDR은 겹치지 않게 둔다(preprod 10.60.0.0/16, prod 10.61.0.0/16).
-  vpc_cidr = "10.61.0.0/16"
+  vpc_cidr    = "10.61.0.0/16"
+  domain_name = "aws.bandal.dev"
 
   # 태그는 provider default_tags 대신 각 리소스에 명시한다. 두 환경이 한 계정을 쓰므로
   # 콘솔과 비용에서 Environment 태그로 환경을 구분한다.
@@ -31,10 +32,11 @@ module "vpc" {
 module "vpc_security_groups" {
   source = "../../modules/vpc-security-groups"
 
-  name_prefix = local.name_prefix
-  vpc_id      = module.vpc.vpc_id
-  vpc_cidr    = module.vpc.cidr_block
-  tags        = local.tags
+  name_prefix         = local.name_prefix
+  vpc_id              = module.vpc.vpc_id
+  vpc_cidr            = module.vpc.cidr_block
+  enable_public_https = true
+  tags                = local.tags
 }
 
 module "ecr_repository" {
@@ -43,4 +45,67 @@ module "ecr_repository" {
   name          = "${local.name_prefix}-web"
   push_role_arn = "arn:aws:iam::${var.expected_account_id}:role/aws-fullstack-lab-image"
   tags          = local.tags
+}
+
+module "certificate" {
+  source = "../../modules/acm-certificate"
+
+  domain_name = local.domain_name
+  tags        = local.tags
+}
+
+module "alb" {
+  source = "../../modules/alb-web"
+
+  name_prefix       = local.name_prefix
+  vpc_id            = module.vpc.vpc_id
+  public_subnet_ids = [for az in var.availability_zones : module.vpc.public_subnet_ids[az]]
+  security_group_id = module.vpc_security_groups.alb_security_group_id
+  certificate_arn   = module.certificate.validated_certificate_arn
+  tags              = local.tags
+}
+
+module "ecs_cluster" {
+  source = "../../modules/ecs-cluster"
+
+  name_prefix = local.name_prefix
+  tags        = local.tags
+}
+
+module "ecs_host" {
+  source = "../../modules/ec2-ecs-host"
+
+  name_prefix        = local.name_prefix
+  cluster_name       = module.ecs_cluster.name
+  public_subnet_ids  = [for az in var.availability_zones : module.vpc.public_subnet_ids[az]]
+  security_group_ids = [module.vpc_security_groups.ecs_host_security_group_id]
+  host_count         = 2
+  imds_hop_limit     = 2
+  tags               = local.tags
+}
+
+module "web" {
+  source = "../../modules/ecs-prod-web"
+
+  name_prefix    = local.name_prefix
+  cluster_id     = module.ecs_cluster.id
+  account_id     = var.expected_account_id
+  region         = var.aws_region
+  repository_url = module.ecr_repository.repository_url
+  # preprod에 지정된 첫 이미지와 같은 태그를 prod 저장소에서 사용한다.
+  image_tag        = "757ff359a5bb83c9b5dab18767d5d80f8e876db4"
+  target_group_arn = module.alb.target_group_arn
+  tags             = local.tags
+
+  depends_on = [module.ecs_host, module.alb]
+}
+
+module "dns" {
+  source = "../../modules/route53-alias"
+
+  domain_name  = local.domain_name
+  alb_dns_name = module.alb.dns_name
+  alb_zone_id  = module.alb.zone_id
+
+  depends_on = [module.web]
 }

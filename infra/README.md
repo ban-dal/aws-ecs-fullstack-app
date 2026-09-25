@@ -15,12 +15,16 @@ infra/
 | [`budgets`](modules/budgets/main.tf) | 월간 비용 알림 | bootstrap |
 | [`ecr-registry`](modules/ecr-registry/main.tf) | 레지스트리(계정) 단위 push 스캔 | bootstrap |
 | [`ecr-repository`](modules/ecr-repository/main.tf) | 환경별 이미지 저장소와 lifecycle | preprod, prod |
-| [`ec2-ecs-host`](modules/ec2-ecs-host/main.tf) | 단일 ECS 호스트 | preprod |
+| [`ec2-ecs-host`](modules/ec2-ecs-host/main.tf) | preprod 한 대·prod 두 AZ의 ECS 호스트 | preprod, prod |
+| [`acm-certificate`](modules/acm-certificate/main.tf) | prod 공개 인증서와 DNS 검증 | prod |
+| [`alb-web`](modules/alb-web/main.tf) | prod HTTPS ALB와 앱 대상 그룹 | prod |
 | [`ec2-client-vpn`](modules/ec2-client-vpn/main.tf) | 인증서 기반 AWS Client VPN 엔드포인트와 단일 서브넷 연결 | preprod |
-| [`ecs-cluster`](modules/ecs-cluster/main.tf) | ECS 클러스터 | preprod |
+| [`ecs-cluster`](modules/ecs-cluster/main.tf) | ECS 클러스터 | preprod, prod |
 | [`ecs-preprod-web`](modules/ecs-preprod-web/main.tf) | 앱 태스크·서비스·로그 | preprod |
+| [`ecs-prod-web`](modules/ecs-prod-web/main.tf) | prod 앱 태스크·서비스·로그 | prod |
 | [`iam`](modules/iam/main.tf) | GitHub OIDC, 공통 plan·apply·image 역할, 사람의 MFA 운영 역할, 공통 ECS 역할 | bootstrap |
 | [`route53-zone`](modules/route53-zone/main.tf) | 서비스 도메인 `aws.bandal.dev` 영역과 CAA | bootstrap |
+| [`route53-alias`](modules/route53-alias/main.tf) | 서비스 주소를 prod ALB에 연결 | prod |
 | [`s3-terraform-state`](modules/s3-terraform-state/main.tf) | Terraform state 버킷 | bootstrap |
 | [`vpc`](modules/vpc/main.tf) | VPC, 서브넷, Internet Gateway, 라우팅 | preprod, prod |
 | [`vpc-security-groups`](modules/vpc-security-groups/main.tf) | ALB·ECS 호스트·preprod VPN 보안 그룹과 규칙 | preprod, prod |

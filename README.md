@@ -8,7 +8,7 @@ Next.js 앱과 AWS 인프라를 한 저장소에서 관리하는 프로젝트다
 | --- | --- |
 | `apps/web` | Next.js 앱과 `/api/health` |
 | `infra/bootstrap` | 계정·IAM 루트: state 버킷, GitHub OIDC 역할 3개, 공통 ECS 역할 2개, 비용 Budget, 사람의 운영 역할, ECR 스캔 |
-| `infra/environments/<환경>` | preprod·prod 서비스 루트: VPC, 보안 그룹, ECR 저장소와 preprod ECS 호스트·VPN |
+| `infra/environments/<환경>` | preprod·prod 서비스 루트: VPC, 보안 그룹, ECR, preprod VPN 앱과 prod 공개 HTTPS 앱 |
 | `infra/modules` | AWS 서비스 이름으로 나눈 모듈. 구조와 규칙은 [infra/README.md](infra/README.md) |
 | `.github/workflows/ci.yml` | PR과 main의 앱 타입 검사·빌드 |
 | `.github/workflows/terraform.yml` | PR Terraform fmt·validate, 설정 후 환경별 plan |
@@ -64,7 +64,7 @@ terraform -chdir=infra/bootstrap output -raw state_bucket | gh secret set TF_STA
 
 ## 다음 단계
 
-prod의 ALB·ACM·Route 53 공개 HTTPS와 이미지 승격 흐름을 추가한다. S3·Lambda 예제는 비용을 따로 검토한다.
+prod 공개 서비스는 리뷰한 PR을 merge한 뒤 `Apply service foundation`의 prod 승인을 거쳐 켠다. 배포와 중지는 [운영 가이드](docs/operations.md#prod-공개-https-앱)에 따른다. 다음에는 이미지 승격 흐름과 S3·Lambda 예제를 비용 검토 후 추가한다.
 
 ## 문서
 

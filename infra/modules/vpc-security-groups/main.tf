@@ -1,5 +1,5 @@
-# 앞으로 둘 ALB와 ECS EC2 호스트의 보안 그룹이다. ALB의 공개 수신은 앱을 켤 때까지
-# 닫아 둔다. 호스트는 ALB에서 오는 bridge 동적 포트만 받고 SSH는 열지 않는다.
+# ALB와 ECS EC2 호스트의 보안 그룹이다. prod의 ALB만 HTTP 리다이렉트와
+# HTTPS를 공개하고, 호스트는 ALB에서 오는 bridge 동적 포트만 받는다. SSH는 열지 않는다.
 
 # 규칙은 inline 블록 대신 별도 규칙 리소스로 관리한다. 이후 ALB 공개 수신 등 규칙을
 # 추가할 때 inline 규칙과 규칙 리소스가 서로를 덮어쓰지 않게 하기 위해서다.
@@ -20,6 +20,26 @@ resource "aws_security_group" "ecs_host" {
 }
 
 # 규칙에는 태그를 붙이지 않는다. 환경은 부모 보안 그룹의 태그로 구분한다.
+resource "aws_vpc_security_group_ingress_rule" "alb_http" {
+  count             = var.enable_public_https ? 1 : 0
+  security_group_id = aws_security_group.alb.id
+  description       = "Redirect public HTTP to HTTPS"
+  ip_protocol       = "tcp"
+  from_port         = 80
+  to_port           = 80
+  cidr_ipv4         = "0.0.0.0/0"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "alb_https" {
+  count             = var.enable_public_https ? 1 : 0
+  security_group_id = aws_security_group.alb.id
+  description       = "Public HTTPS"
+  ip_protocol       = "tcp"
+  from_port         = 443
+  to_port           = 443
+  cidr_ipv4         = "0.0.0.0/0"
+}
+
 resource "aws_vpc_security_group_egress_rule" "alb_to_hosts" {
   security_group_id = aws_security_group.alb.id
   description       = "Dynamic ECS host ports inside the VPC"

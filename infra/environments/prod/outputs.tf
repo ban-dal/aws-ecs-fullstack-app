@@ -21,3 +21,19 @@ output "ecs_host_security_group_id" {
 output "ecr_repository_url" {
   value = module.ecr_repository.repository_url
 }
+
+output "site_url" {
+  value = "https://${module.dns.fqdn}"
+}
+
+output "alb_dns_name" {
+  value = module.alb.dns_name
+}
+
+output "ecs_cluster_name" {
+  value = module.ecs_cluster.name
+}
+
+output "ecs_autoscaling_group_name" {
+  value = module.ecs_host.autoscaling_group_name
+}

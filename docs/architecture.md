@@ -32,7 +32,7 @@ flowchart LR
 `preprod`와 `prod`는 AI 성능 실험과 학습을 위한 환경이다. 같은 모듈을 쓰되 루트는 `infra/environments/preprod`, `infra/environments/prod`로 나눈다. 두 환경은 값뿐 아니라 구성이 달라지므로, 각 루트의 `main.tf`가 그 환경의 구성을 그대로 보여 주게 하기 위해서다. VPC CIDR은 각각 `10.60.0.0/16`, `10.61.0.0/16`이고 리소스 이름과 `preprod/terraform.tfstate`, `prod/terraform.tfstate` 키를 분리한다.
 
 - **preprod:** 고가용성이 필요 없다. ALB 없이 ECS 호스트 한 대를 두고, AWS Client VPN의 인증서로 접속한 기기만 호스트의 사설 IP와 HTTP 3000 포트에 접근한다. 관리형 VPN 엔드포인트는 연결자가 없어도 시간당 과금된다. 호스트에는 공개 수신 규칙이 없다.
-- **prod:** 두 AZ에 호스트를 두고 ALB와 ACM 인증서로 공개 HTTPS를 제공한다. ALB는 서브넷이 두 AZ에 있어야 하므로 두 환경 모두 VPC 서브넷은 두 AZ에 둔다.
+- **prod:** 두 AZ에 호스트를 한 대씩 두고 ALB와 ACM 인증서로 `aws.bandal.dev` 공개 HTTPS를 제공한다. ALB는 두 AZ의 공개 서브넷을 쓴다. 호스트는 공개 IP로 ECR·SSM에 나가지만 인터넷에서 직접 들어오는 포트는 없다.
 
 두 환경은 한 AWS 계정을 공유하므로 IAM과 계정 수준 장애는 분리되지 않는다. 계정을 나누려면 AWS Organizations가 필요한데, 현재 Free plan 계정이 가입하면 크레딧이 즉시 만료되고 유료 플랜으로 전환된다. 실제 사용자 데이터를 다루거나 Free plan이 끝나거나 환경 간 IAM 격리가 필요해지면 계정 분리를 다시 검토한다. 콘솔은 계정 하나에서 리소스 이름과 `Environment` 태그로 환경을 구분한다.
 
@@ -52,7 +52,7 @@ flowchart LR
   Approval --> Apply[선택한 환경 apply]
 ```
 
-이미지는 main에서 한 번 빌드해 두 환경 저장소에 같은 commit SHA 태그로 올린다. 배포는 이 태그를 고르므로 prod에는 preprod와 같은 커밋이 간다. 첫 preprod 배포는 이미 저장소에 있는 이미지를 고정 태그로 사용한다. preprod는 Client VPN에서 호스트 사설 IP의 고정 앱 포트로만 들어오고, prod는 bridge 네트워크의 동적 호스트 포트를 사용할 예정이다. prod ALB 대상 그룹은 instance 유형이고 prod EC2 보안 그룹은 ALB 보안 그룹에서 오는 임시 포트만 연다.
+이미지는 main에서 한 번 빌드해 두 환경 저장소에 같은 commit SHA 태그로 올린다. 첫 prod 배포는 preprod에 지정된 고정 이미지 태그를 쓴다. 이후 승격할 태그를 두 환경에서 같은 값으로 바꾼다. preprod는 Client VPN에서 호스트 사설 IP의 고정 앱 포트로만 들어오고, prod는 bridge 네트워크의 동적 호스트 포트를 쓴다. prod ALB 대상 그룹은 instance 유형이고 prod EC2 보안 그룹은 ALB 보안 그룹에서 오는 임시 포트만 연다.
 
 ## 보안과 한계
 
