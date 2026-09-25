@@ -47,6 +47,11 @@ resource "aws_ecs_task_definition" "web" {
   }])
 
   tags = var.tags
+
+  # 새 revision을 등록하고 서비스가 그 revision으로 전환한 뒤 기존 revision을 해제한다.
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_ecs_service" "web" {

@@ -90,7 +90,7 @@ PR에서는 두 환경의 plan 요약과 바뀐 인프라 파일이 PR 댓글 �
 
 1. GitHub Actions에서 `Apply service foundation`을 `main`의 환경 하나로 실행한다.
 2. plan 작업은 승인 없이 실행된다. 실행 화면의 요약에서 변경과 검사 결과를 확인한다.
-3. prod는 `prod-apply`를 승인한다. preprod는 승인 없이 이어진다. 적용 작업은 plan을 다시 만들어, plan 작업과 변경 내용이 같을 때만 적용한다. 그사이 인프라가 바뀌었으면 적용하지 않고 실패하므로 workflow를 다시 실행한다. 서비스 기반 모듈 안의 생성·수정만 허용하고 삭제·교체는 막는다([`scripts/tfplan.sh`](../scripts/tfplan.sh)).
+3. prod는 `prod-apply`를 승인한다. preprod는 승인 없이 이어진다. 적용 작업은 plan을 다시 만들어, plan 작업과 변경 내용이 같을 때만 적용한다. 그사이 인프라가 바뀌었으면 적용하지 않고 실패하므로 workflow를 다시 실행한다. 서비스 기반 모듈 안의 생성·수정과 prod 웹 태스크 정의의 컨테이너 변경에 따른 선생성 교체만 허용한다. 다른 삭제·교체는 막는다([`scripts/tfplan.sh`](../scripts/tfplan.sh)).
 4. 적용 기록은 GitHub Deployments의 `*-apply` 환경에 자동으로 남는다. 계기가 된 PR에 실행 링크를 댓글로 남긴다.
 
 `prod`는 `preprod` 결과와 비용을 검토한 뒤 따로 결정한다. 서비스 기반 plan은 PR이나 이 workflow의 plan 단계에서 확인한다. 공통 apply 역할은 IAM으로 환경 간 변경을 막지 않으므로, 선택한 루트와 plan 요약을 승인할 때 확인한다.
@@ -100,6 +100,8 @@ PR에서는 두 환경의 plan 요약과 바뀐 인프라 파일이 PR 댓글 �
 ### 이미지 빌드
 
 `Build image`(`.github/workflows/image.yml`)는 앱 파일이 바뀐 PR에서 arm64 이미지를 빌드하고, 컨테이너를 띄워 `/api/health`를 확인한다. main에 merge되면 같은 이미지를 commit SHA 태그로 preprod·prod 저장소에 올리고, 실행 요약에 태그·digest·취약점 스캔 결과 개수를 남긴다. 저장소 태그는 덮어쓸 수 없으므로, 같은 태그가 있으면 건너뛴다. 앱 파일 변경 없이 다시 올리려면 main에서 workflow를 수동 실행한다. 저장소 정책이 image 역할 외의 push를 거부하므로 로컬에서는 올리지 않는다.
+
+prod 앱 이미지를 승격할 때는 main의 `Build image` 성공과 prod 저장소 push를 확인하고, `infra/environments/prod/main.tf`의 `image_tag`를 해당 main SHA로 바꾸는 PR을 연다. prod plan에서 웹 태스크 정의의 컨테이너 변경에 따른 선생성 교체와 ECS 서비스 수정만 확인한다. merge 후 [서비스 적용 절차](#4-서비스-기반-적용)에서 prod를 실행하고, [prod 점검](#prod-공개-https-앱)을 한다. 되돌릴 때는 이전 이미지 태그로 PR을 열어 같은 절차를 밟는다.
 
 ### preprod 앱과 AWS Client VPN 접속
 

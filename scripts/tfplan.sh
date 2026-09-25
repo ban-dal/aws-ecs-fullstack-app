@@ -30,13 +30,22 @@ case "$command" in
     ;;
 
   check-foundation)
-    # 환경 루트의 모듈 안에서 생기는 생성·수정만 허용한다. 삭제와 교체는 데이터를
-    # 잃거나 서비스가 끊길 수 있어 이 workflow로 적용하지 않는다. 필요하면 별도로 검토한
-    # 절차를 만든다. 루트에는 모듈 호출만 두므로 모든 리소스 주소는 module.로 시작한다.
+    # 환경 루트의 모듈 안에서 생기는 생성·수정만 허용한다. 유일한 교체 예외는
+    # prod 웹 태스크 정의의 컨테이너 정의 변경이다. create_before_destroy로 새
+    # revision을 먼저 만들고 ECS 서비스가 전환한 뒤 기존 revision을 해제한다.
+    # 루트에는 모듈 호출만 두므로 모든 리소스 주소는 module.로 시작한다.
     violations="$(jq -r '
+      def allowed:
+        (.change.actions == ["no-op"]
+          or .change.actions == ["create"]
+          or .change.actions == ["update"]
+          or .change.actions == ["read"])
+        or (.address == "module.web.aws_ecs_task_definition.web"
+            and .change.actions == ["create", "delete"]
+            and .change.replace_paths == [["container_definitions"]]);
       .resource_changes[]?
       | select((.address | startswith("module.") | not)
-          or ((.change.actions - ["no-op", "create", "update", "read"]) | length > 0))
+          or (allowed | not))
       | "- \(.change.actions | join("/")) \(.address)"
     ' "$plan_json")"
     if [[ -n "$violations" ]]; then
@@ -44,7 +53,7 @@ case "$command" in
       echo "$violations"
       exit 1
     fi
-    echo "적용 workflow 검사 통과: 모듈 안의 생성·수정만 있다."
+    echo "적용 workflow 검사 통과: 모듈 안의 생성·수정 또는 prod 웹 태스크 정의의 선생성 교체만 있다."
     ;;
 
   fingerprint)
