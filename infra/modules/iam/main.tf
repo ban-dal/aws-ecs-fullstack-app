@@ -52,66 +52,34 @@ resource "aws_iam_role" "github" {
   tags                 = { Project = "aws-fullstack-lab", Purpose = each.key }
 }
 
-# 계정의 첫 AWS Client VPN 엔드포인트는 서비스 연결 역할을 자동 생성하려 한다.
-# GitHub apply 역할에 IAM 생성 권한을 주지 않도록 bootstrap에서 한 번 만든다.
-resource "aws_iam_service_linked_role" "client_vpn" {
-  aws_service_name = "clientvpn.amazonaws.com"
+# Terraform 역할은 AWS 관리형 정책으로 서비스 권한을 받아, 새 AWS 서비스를 쓸 때 bootstrap
+# 정책을 고치지 않는다. plan과 apply를 한 역할로 합치지 않는다. `*-plan` 환경은 승인 없이
+# PR 브랜치의 코드(workflow 포함)도 토큰을 받으므로, 여기에 쓰기 권한을 주면 merge와 prod
+# 승인을 거치지 않고 적용할 수 있다. 쓰기 역할은 main에서만 배포하는 `*-apply` 환경만
+# 수임한다(scripts/check-github-settings.sh).
+resource "aws_iam_role_policy_attachment" "github" {
+  for_each   = { plan = "ReadOnlyAccess", apply = "PowerUserAccess" }
+  role       = aws_iam_role.github[each.key].name
+  policy_arn = "arn:aws:iam::aws:policy/${each.value}"
 }
 
-# plan은 두 환경 state 본문을 읽고 각 lock 객체만 변경한다. 서비스 refresh는 조회만 한다.
+# ReadOnlyAccess에 state lock 쓰기만 더한다. 환경 plan은 bootstrap state를 읽을 필요가 없다.
 data "aws_iam_policy_document" "plan" {
   statement {
-    actions   = ["s3:ListBucket"]
-    resources = [var.state_bucket_arn]
-  }
-  statement {
-    actions   = ["s3:GetObject"]
-    resources = [for environment in var.environments : "${var.state_bucket_arn}/${environment}/terraform.tfstate"]
-  }
-  statement {
     actions   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
     resources = [for environment in var.environments : "${var.state_bucket_arn}/${environment}/terraform.tfstate.tflock"]
   }
   statement {
-    actions = [
-      "autoscaling:Describe*", "ec2:Describe*", "ecs:Describe*", "ecs:List*",
-      "logs:Describe*", "logs:ListTagsForResource", "logs:ListTagsLogGroup",
-    ]
-    resources = ["*"]
-  }
-  statement {
-    actions   = ["ecr:DescribeRepositories", "ecr:GetLifecyclePolicy", "ecr:ListTagsForResource"]
-    resources = local.repository_arns
+    effect    = "Deny"
+    actions   = ["s3:GetObject"]
+    resources = ["${var.state_bucket_arn}/bootstrap/*"]
   }
 }
 
-# apply는 프로젝트 서비스의 변경 권한을 넓게 가진다. state·ECR·PassRole만 대상 제한을 둔다.
+# PowerUserAccess는 IAM을 허용하지 않으므로 PassRole만 공통 ECS 역할과 정해진 서비스로 연다.
+# 서비스 연결 역할 생성은 PowerUserAccess가 허용하므로 서비스가 필요할 때 직접 만든다.
 # 비용 상한은 IAM에 두지 않으며 Budget은 알림만 보낸다.
 data "aws_iam_policy_document" "apply" {
-  statement {
-    actions   = ["s3:ListBucket"]
-    resources = [var.state_bucket_arn]
-  }
-  statement {
-    actions   = ["s3:GetObject", "s3:PutObject"]
-    resources = [for environment in var.environments : "${var.state_bucket_arn}/${environment}/terraform.tfstate"]
-  }
-  statement {
-    actions   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
-    resources = [for environment in var.environments : "${var.state_bucket_arn}/${environment}/terraform.tfstate.tflock"]
-  }
-  statement {
-    actions   = ["autoscaling:*", "ec2:*", "ecs:*", "logs:*"]
-    resources = ["*"]
-  }
-  statement {
-    actions = [
-      "ecr:CreateRepository", "ecr:DeleteLifecyclePolicy", "ecr:DeleteRepository",
-      "ecr:DescribeRepositories", "ecr:GetLifecyclePolicy", "ecr:ListTagsForResource",
-      "ecr:PutImageTagMutability", "ecr:PutLifecyclePolicy", "ecr:TagResource", "ecr:UntagResource",
-    ]
-    resources = local.repository_arns
-  }
   statement {
     actions   = ["iam:PassRole"]
     resources = [local.host_role_arn]
@@ -129,6 +97,31 @@ data "aws_iam_policy_document" "apply" {
       variable = "iam:PassedToService"
       values   = ["ecs-tasks.amazonaws.com"]
     }
+  }
+
+  # PowerUserAccess는 모든 S3·CloudTrail 변경도 허용한다. GitHub 역할이 state 이력과 감사
+  # 로그를 지우거나 bootstrap state를 고치지 못하도록 bootstrap이 소유한 두 기반만 막는다.
+  # state 버킷에서는 S3 backend가 쓰는 목록 조회와 객체 읽기·쓰기·삭제만 남긴다. 삭제해도
+  # 버전 관리로 이전 버전이 남는다.
+  statement {
+    effect      = "Deny"
+    not_actions = ["s3:ListBucket"]
+    resources   = [var.state_bucket_arn]
+  }
+  statement {
+    effect      = "Deny"
+    not_actions = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
+    resources   = ["${var.state_bucket_arn}/*"]
+  }
+  statement {
+    effect    = "Deny"
+    actions   = ["s3:*"]
+    resources = ["${var.state_bucket_arn}/bootstrap/*", var.audit_bucket_arn, "${var.audit_bucket_arn}/*"]
+  }
+  statement {
+    effect    = "Deny"
+    actions   = ["cloudtrail:DeleteTrail", "cloudtrail:PutEventSelectors", "cloudtrail:StopLogging", "cloudtrail:UpdateTrail"]
+    resources = [var.audit_trail_arn]
   }
 }
 
@@ -303,10 +296,4 @@ resource "aws_iam_role_policy" "ecs_execution" {
   name   = "ecs-task-execution"
   role   = aws_iam_role.ecs_execution.name
   policy = data.aws_iam_policy_document.ecs_execution.json
-}
-
-# apply 역할에 IAM 생성 권한을 주지 않도록 서비스 연결 역할은 bootstrap에서 미리 만든다.
-resource "aws_iam_service_linked_role" "this" {
-  for_each         = toset(["autoscaling.amazonaws.com", "ecs.amazonaws.com"])
-  aws_service_name = each.value
 }

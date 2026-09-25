@@ -2,8 +2,6 @@
 locals {
   environments = toset(["preprod", "prod"])
   account_id   = var.expected_account_id
-
-
 }
 
 module "s3_terraform_state" {
@@ -18,6 +16,8 @@ module "iam" {
   environments       = local.environments
   repository_subject = var.github_repository_subject
   state_bucket_arn   = module.s3_terraform_state.arn
+  audit_trail_arn    = module.cloudtrail_audit.trail_arn
+  audit_bucket_arn   = module.cloudtrail_audit.bucket_arn
 }
 
 module "budgets" {

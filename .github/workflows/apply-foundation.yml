@@ -1,10 +1,12 @@
 # merge된 main에서만 한 환경의 루트(infra/environments/<environment>)를 적용한다.
-# merge만으로는 배포되지 않는다. plan과 apply는 서로 다른 OIDC 역할과 GitHub 환경을 쓴다. plan 파일에는 민감한 값이
-# 들어갈 수 있으므로 저장 plan은 runner 밖으로 내보내지 않는다.
+# merge만으로는 배포되지 않는다. plan은 읽기 전용 역할, apply는 main 전용 `*-apply` 환경의
+# 쓰기 역할을 쓴다. plan 파일에는 민감한 값이 들어갈 수 있으므로 저장 plan은 runner 밖으로
+# 내보내지 않는다.
 #
 # plan 작업은 승인 없이 실행되어 변경 요약을 실행 화면에 올리고 변경 내용의 fingerprint를
-# 넘긴다. 사람은 그 요약을 보고 *-apply 환경만 승인한다. apply 작업은 승인 뒤 plan을 다시
-# 만들고, fingerprint가 승인 때와 같을 때만 적용한다. 그래서 승인한 plan과 적용되는 plan이
+# 넘긴다. prod는 사람이 그 요약을 보고 prod-apply를 한 번 승인하고, preprod는 수동 실행이
+# 곧 결정이라 승인 없이 이어진다(scripts/check-github-settings.sh). apply 작업은 plan을 다시
+# 만들고, fingerprint가 plan 작업과 같을 때만 적용한다. 그래서 승인한 plan과 적용되는 plan이
 # 같다. 허용하는 변경의 기준은 scripts/tfplan.sh에 있다.
 name: Apply service foundation
 
@@ -65,7 +67,7 @@ jobs:
           if [[ "$TARGET_ENV" == preprod ]]; then test -n "$TF_VAR_client_vpn_server_certificate_arn"; fi
       - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
-          role-to-assume: ${{ vars.AWS_PLAN_ROLE_ARN || format('arn:aws:iam::{0}:role/aws-fullstack-lab-plan', secrets.AWS_ACCOUNT_ID) }}
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/aws-fullstack-lab-plan
           aws-region: ${{ env.AWS_REGION }}
       - name: Plan the selected state
         id: plan
@@ -116,9 +118,9 @@ jobs:
           if [[ "$TARGET_ENV" == preprod ]]; then test -n "$TF_VAR_client_vpn_server_certificate_arn"; fi
       - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
-          role-to-assume: ${{ vars.AWS_APPLY_ROLE_ARN || format('arn:aws:iam::{0}:role/aws-fullstack-lab-apply', secrets.AWS_ACCOUNT_ID) }}
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/aws-fullstack-lab-apply
           aws-region: ${{ env.AWS_REGION }}
-      - name: Plan again and compare with the approved plan
+      - name: Plan again and compare with the reviewed plan
         env:
           APPROVED_FINGERPRINT: ${{ needs.plan.outputs.fingerprint }}
         run: |
@@ -132,10 +134,10 @@ jobs:
           scripts/tfplan.sh check-foundation "$RUNNER_TEMP/foundation.json"
           fingerprint="$(scripts/tfplan.sh fingerprint "$RUNNER_TEMP/foundation.json")"
           if [ "$fingerprint" != "$APPROVED_FINGERPRINT" ]; then
-            echo "승인 이후 plan이 바뀌었다. 적용하지 않는다. workflow를 다시 실행해 새 plan을 승인한다." >&2
+            echo "plan 작업 이후 plan이 바뀌었다. 적용하지 않는다. workflow를 다시 실행해 새 plan을 확인한다." >&2
             scripts/tfplan.sh summary "$RUNNER_TEMP/foundation.json" >&2
             exit 1
           fi
-          echo "승인한 plan과 같다: $fingerprint"
-      - name: Apply the approved plan
+          echo "plan 작업의 plan과 같다: $fingerprint"
+      - name: Apply the reviewed plan
         run: terraform -chdir="infra/environments/$TARGET_ENV" apply -input=false -no-color "$RUNNER_TEMP/foundation.tfplan"

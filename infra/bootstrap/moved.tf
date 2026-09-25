@@ -1,25 +1,12 @@
-# 기존 OIDC 제공자와 사람의 로그인 정보를 유지한다. 적용 후 다음 PR에서 제거한다.
-moved {
-  from = module.iam_github_oidc.aws_iam_openid_connect_provider.github
-  to   = module.iam.aws_iam_openid_connect_provider.github
+# 서비스 연결 역할은 GitHub apply 역할(PowerUserAccess)로 서비스가 필요할 때 만든다. 이미 있는
+# 역할은 ECS·Auto Scaling·Client VPN이 쓰고 있어 지우지 않고 state에서만 뺀다. 적용 후 다음
+# PR에서 이 블록을 지운다.
+removed {
+  from = module.iam.aws_iam_service_linked_role.this
+  lifecycle { destroy = false }
 }
 
-moved {
-  from = module.iam_operator.aws_iam_user.this
-  to   = module.iam.aws_iam_user.operator
-}
-
-moved {
-  from = module.iam_operator.aws_iam_role.this
-  to   = module.iam.aws_iam_role.operator
-}
-
-moved {
-  from = module.iam_service_linked_roles.aws_iam_service_linked_role.this["autoscaling.amazonaws.com"]
-  to   = module.iam.aws_iam_service_linked_role.this["autoscaling.amazonaws.com"]
-}
-
-moved {
-  from = module.iam_service_linked_roles.aws_iam_service_linked_role.this["ecs.amazonaws.com"]
-  to   = module.iam.aws_iam_service_linked_role.this["ecs.amazonaws.com"]
+removed {
+  from = module.iam.aws_iam_service_linked_role.client_vpn
+  lifecycle { destroy = false }
 }

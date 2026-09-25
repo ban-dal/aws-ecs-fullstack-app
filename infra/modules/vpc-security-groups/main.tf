@@ -19,8 +19,7 @@ resource "aws_security_group" "ecs_host" {
   tags = merge(var.tags, { Name = "${var.name_prefix}-ecs-host-sg" })
 }
 
-# 규칙에는 태그를 붙이지 않는다. 적용 역할은 Environment 태그가 있는 리소스만 태그를
-# 바꿀 수 있고, 규칙 권한은 부모 보안 그룹의 태그로 검사한다.
+# 규칙에는 태그를 붙이지 않는다. 환경은 부모 보안 그룹의 태그로 구분한다.
 resource "aws_vpc_security_group_egress_rule" "alb_to_hosts" {
   security_group_id = aws_security_group.alb.id
   description       = "Dynamic ECS host ports inside the VPC"
