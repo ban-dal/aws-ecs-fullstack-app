@@ -121,6 +121,8 @@ PR에서는 두 환경의 plan 요약과 바뀐 인프라 파일이 PR 댓글 �
 3. merge 후 `main`에서 `Apply service foundation`의 **prod**를 선택한다. plan을 검토하고 `prod-apply` 승인을 완료한다. 인증서 검증과 두 호스트의 시작 때문에 적용이 몇 분 걸릴 수 있다.
 4. 적용 후 `scripts/prod-service.sh check`를 실행한다. ECS 태스크와 ALB 정상 대상이 각각 2/2인지, `https://aws.bandal.dev/api/health`가 `prod`를 반환하는지 확인한다. HTTP는 HTTPS로 이동해야 한다.
 
+홈 화면의 **8회 요청 검사**로 요청마다 응답한 EC2 인스턴스·가용 영역·ECS 태스크를 비교할 수 있다. 관측된 호스트 수는 해당 브라우저의 최근 요청 표본이므로 2개가 보이지 않아도 곧바로 장애로 판단하지 않는다. 서비스 전체 상태와 ALB 정상 대상 수는 `scripts/prod-service.sh check` 결과로 확인한다. `/api/backend`는 같은 정보의 JSON 응답이며 캐시하지 않는다.
+
 사용하지 않을 때는 운영 역할로 `scripts/prod-service.sh suspend`를 실행한다. 태스크·호스트를 0대로 줄이고 ALB를 삭제해 주요 시간당 비용을 멈춘다. DNS alias는 다음 적용 전까지 이전 ALB를 가리키므로 사이트는 응답하지 않는다. Terraform state와 차이가 생기며, 재개할 때는 prod 적용 workflow의 새 plan에서 ALB 재생성·DNS 갱신·호스트·태스크 복구만 있는지 확인한 뒤 승인한다. 로그·ECR 저장 비용은 계속 발생한다.
 
 ### 도메인 위임

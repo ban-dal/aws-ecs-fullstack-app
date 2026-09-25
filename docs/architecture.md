@@ -54,6 +54,12 @@ flowchart LR
 
 이미지는 main에서 한 번 빌드해 두 환경 저장소에 같은 commit SHA 태그로 올린다. 첫 prod 배포는 preprod에 지정된 고정 이미지 태그를 쓴다. 이후 승격할 태그를 두 환경에서 같은 값으로 바꾼다. preprod는 Client VPN에서 호스트 사설 IP의 고정 앱 포트로만 들어오고, prod는 bridge 네트워크의 동적 호스트 포트를 쓴다. prod ALB 대상 그룹은 instance 유형이고 prod EC2 보안 그룹은 ALB 보안 그룹에서 오는 임시 포트만 연다.
 
+## 요청 경로 관측
+
+prod 홈 화면과 `/api/backend`는 요청의 Host, `X-Forwarded-Proto`, `X-Amzn-Trace-Id` 헤더를 읽는다. 앱이 실행 중인 ECS 태스크 ID는 ECS task metadata v4에서, EC2 인스턴스 ID와 가용 영역은 IMDSv2에서 읽는다. 메타데이터 조회는 prod에서만 하고, 계정 ID가 포함된 태스크 ARN과 자격 증명은 응답에 포함하지 않는다. 별도 AWS 읽기 권한은 필요하지 않다.
+
+`/api/backend`를 반복 호출해 나타난 서로 다른 호스트 수는 그 요청의 표본이다. ALB 전체 대상의 정상 상태나 ECS 서비스 전체 태스크 수를 의미하지 않는다. 운영 상태는 [prod 점검 절차](operations.md#prod-공개-https-앱)로 확인한다.
+
 ## 보안과 한계
 
 권한 정책이 무엇을 허용하고 거부해야 하는지는 [`infra/bootstrap/tests/`](../infra/bootstrap/tests/iam.test.mjs)의 테스트가 기준이다. bootstrap을 적용할 때마다 `scripts/bootstrap.sh plan`이 이 테스트를 실행한다.
