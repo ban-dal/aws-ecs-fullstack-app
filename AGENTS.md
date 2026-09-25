@@ -1,44 +1,56 @@
 # 작업 지침
 
-이 저장소는 AI가 기획, 디자인, 애플리케이션, 인프라와 운영 문서를 함께 유지하는 실험 프로젝트다. 변경 전 `README.md`와 변경 범위에 관련된 `docs/` 문서를 읽고, 코드와 문서가 어긋나면 같은 변경에서 함께 고친다.
+AI가 기획·디자인·앱·인프라·운영 문서를 함께 유지하는 실험 프로젝트다. 작업 전 `README.md`와 관련 문서를 읽고, 코드와 문서가 어긋나면 같은 변경에서 고친다.
 
-## 기본 원칙
+## 문서
 
-- 목표와 사용자 동작은 `docs/product.md`, 화면과 접근성 기준은 `docs/design.md`, 큰 구조는 `docs/architecture.md`, 운영 절차는 `docs/operations.md`를 기준으로 한다.
-- Next.js 앱은 `apps/web`에 둔다. 새 공유 패키지는 `packages/*`에 둔다.
-- Terraform은 `infra/README.md`의 구조와 규칙을 따른다. 계정·IAM은 `infra/bootstrap`, 환경별 서비스 리소스는 `infra/environments/<환경>`에서 호출하고, 리소스는 AWS 서비스 이름으로 나눈 `infra/modules/<서비스>-<기능>/`에 둔다.
-- 현재는 pnpm workspaces만 사용한다. 빌드 단계가 복잡해질 때 Turbo를 추가한다.
-- AWS 리소스나 비용을 늘리는 변경은 예상 비용, 종료 방법, 무료 플랜 영향, PR plan 결과를 설명한다. `enable_public_app`의 기본값은 `false`로 유지한다.
-- Terraform state, `.tfvars`, 계정 비밀, AWS 자격 증명은 커밋하지 않는다. GitHub Actions는 OIDC를 사용한다.
-- 저장소는 공개다. AWS 계정 ID, state 버킷 이름, 개인 연락처는 코드·문서·PR 본문·PR 댓글에 쓰지 않고 `<account-id>`, `<state-bucket>`처럼 가린다. 스크립트 출력을 붙여 넣을 때도 가려졌는지 확인한다.
-- Terraform을 구현할 때 `preprod`와 `prod`는 서로 다른 S3 state key와 리소스 이름을 유지한다. 한 환경 변경이 다른 환경에 영향을 주는지 검토한다.
-- 사람의 확인은 PR merge와 prod 서비스 적용 workflow의 `prod-apply` 승인 두 곳이다. PR merge가 그 PR에 적힌 merge 후 운영 작업(bootstrap 적용, GitHub 설정 변경, workflow 실행)의 승인이므로, AI는 따로 묻지 않고 진행한다.
-- 서비스 리소스의 `terraform apply`는 merge 이후 `main`에서 수동 실행한 `Apply service foundation`으로 실행한다. prod는 `prod-apply` 승인을 통과해야 한다. `infra/bootstrap`은 PR merge 후 `scripts/bootstrap.sh`로 로컬에서 적용한다. `plan`의 변경 요약이 PR 본문에 적은 범위와 다르거나 정책 테스트가 실패하면 적용하지 않고 사용자에게 묻는다. bootstrap 적용과 로컬 긴급 변경의 결과는 해당 PR 댓글에 남기고 코드에 반영한다.
+- [`docs/product.md`](docs/product.md): 목표, 사용자 동작
+- [`docs/design.md`](docs/design.md): 화면, 접근성
+- [`docs/architecture.md`](docs/architecture.md): 전체 구조
+- [`docs/operations.md`](docs/operations.md): 운영 절차
+- [`infra/README.md`](infra/README.md): Terraform 구조와 규칙
 
-## 테스트 및 검증
+## 규칙
 
-- 테스트를 새로 쓰거나 이름을 바꿀 때 `it`/`test` 제목은 한국어로 입력·상황과 예상 결과를 모두 포함한다. 예: `GET /api/health는 ok 상태를 반환한다`.
-- 요청 범위의 실제 사용자 동작 또는 회귀 위험을 검증하는 테스트만 추가한다. 낮은 영향의 단순 속성·클래스 확인 테스트는 만들지 않는다.
-- 앱 변경에는 `pnpm typecheck`, `pnpm build`를 실행한다. Terraform 변경에는 `terraform fmt -check`와 수정한 루트 모듈의 `terraform validate`를 실행한다.
-- `infra/bootstrap` 변경에는 `scripts/bootstrap.sh plan`을 실행해 변경 요약과 정책 테스트 결과를 PR에 적는다. IAM 정책의 의도가 바뀌면 `infra/bootstrap/tests/`의 테스트를 같은 PR에서 고친다.
-- GitHub 환경이나 변수를 바꾼 뒤에는 `scripts/check-github-settings.sh`를 실행한다. 기대값이 바뀌면 스크립트를 같은 PR에서 고친다.
-- 브라우저 동작은 필요한 경우 실제 브라우저에서 확인하고 검증 범위를 명시한다.
+- 공개 저장소다. 계정 ID, state 버킷, 개인 연락처는 코드·문서·PR·스크립트 출력에서 `<account-id>`, `<state-bucket>`처럼 가린다.
+- Terraform state, `.tfvars`, 비밀, AWS 자격 증명은 커밋하지 않는다. GitHub Actions는 OIDC를 쓴다.
+- `preprod`와 `prod`는 state key와 리소스 이름을 나누고, 서로 영향을 주는지 검토한다.
+- AWS 비용이 늘면 PR에 예상 비용, 무료 플랜 영향, 종료 방법, plan 결과를 쓴다.
+
+## 테스트
+
+- 테스트 제목은 한국어로 입력과 결과를 쓴다. 예: `GET /api/health는 ok 상태를 반환한다`
+- 테스트는 사용자 동작이나 회귀 위험만 검증한다. 단순 속성·클래스 확인은 쓰지 않는다.
+
+## 적용
+
+| 대상 | 방법 |
+| --- | --- |
+| 서비스 리소스 | merge 후 `main`에서 `Apply service foundation` workflow |
+| `infra/bootstrap` | merge 후 로컬에서 `scripts/bootstrap.sh` |
+
+- plan 범위가 PR 본문과 다르거나 정책 테스트가 실패하면 적용하지 않고 묻는다.
+- merge 후 운영 작업과 로컬 긴급 변경의 결과는 PR 댓글에 남기고, 긴급 변경은 코드에 반영한다.
+
+## 검증
+
+| 변경 | 실행 |
+| --- | --- |
+| 앱 | `pnpm typecheck`, `pnpm build` |
+| Terraform | `terraform fmt -check`, 수정한 루트의 `terraform validate` |
+| `infra/bootstrap` | `scripts/bootstrap.sh plan`의 요약과 정책 테스트 결과를 PR에 쓴다. 정책 의도가 바뀌면 같은 PR에서 `infra/bootstrap/tests/`를 고친다 |
+| GitHub 환경·변수 | `scripts/check-github-settings.sh`. 기대값이 바뀌면 같은 PR에서 스크립트를 고친다 |
 
 ## 사실의 원천
 
-같은 사실을 여러 파일에 쓰지 않는다. 사실마다 아래의 원천 한 곳만 고치고, 문서는 원천을 링크한다. 날짜별 실행 기록이나 번호순 결정 기록은 두지 않는다.
+같은 사실은 원천 한 곳에만 쓰고 나머지는 링크한다. 날짜별 기록, 결정 로그, 상태·완료일·merge commit은 파일에 두지 않는다.
 
 | 정보 | 원천 |
 | --- | --- |
-| 무엇이 선언돼 있나 | Terraform·workflow·스크립트 코드 |
-| 왜 그렇게 했나 (보안·비용 트레이드오프, 도구의 제약) | 결정이 적용된 코드나 스크립트 바로 옆 주석. 코드가 없는 결정(제품 가정, 계정 구조)은 그 결정을 바꿀 때 고칠 문서의 한 문단 |
-| IAM 권한 정책의 의도 | `infra/bootstrap/tests/`의 테스트 |
-| 운영 절차 | `scripts/`의 스크립트. `docs/operations.md`에는 스크립트로 만들 수 없는 순서와 사용법만 둔다 |
+| 선언된 내용 | Terraform·workflow·스크립트 코드 |
+| 결정 이유 | 해당 코드 옆 주석. 코드가 없는 결정은 관련 문서의 한 문단 |
+| IAM 정책 의도 | `infra/bootstrap/tests/` |
+| 운영 절차 | `scripts/`. `docs/operations.md`에는 스크립트로 만들 수 없는 순서와 사용법만 둔다 |
 | GitHub 환경 설정 | `scripts/check-github-settings.sh`의 기대값 |
-| 적용 상태 | bootstrap은 `main`(merge 직후 적용), 서비스 기반은 GitHub Deployments |
-| 변경 이력과 실행 결과 | PR 본문과 PR 댓글 |
-
-## AI 작업 기록
-
-- PR 하나가 작업 하나다. 목표·변경·검증·비용과 운영 영향·남은 사항을 `.github/pull_request_template.md`에 맞춰 PR 본문에 쓴다. AI가 작성한 계획과 코드는 사람의 PR 리뷰를 거친다.
-- merge 후 운영 작업(bootstrap 적용, GitHub 설정 변경, workflow 실행)의 결과는 해당 PR에 댓글로 남긴다. 상태·완료일·merge commit은 파일에 쓰지 않는다.
+| 적용 상태 | bootstrap은 `main`, 서비스는 GitHub Deployments |
+| 변경 이력과 실행 결과 | PR 본문과 댓글 |
