@@ -17,7 +17,7 @@
 
 인프라 PR은 Terraform plan을 검토한 뒤 main에 merge한다. main push에는 인프라 정적 검사만 자동 실행된다. 기반 리소스는 `Apply service foundation`을 수동 실행해 적용하고, bootstrap IAM은 운영자가 `scripts/bootstrap.sh`로 적용한다.
 
-앱 저장소의 `preprod` push는 preprod에 자동 배포하고, `main` push는 prod 배포 workflow를 자동 시작한다. prod 역할은 `main` 전용 `prod-deploy` 환경 승인 후에만 수임한다. 앱 역할은 각 환경의 ECR 저장소·ECS 서비스에만 접근한다. Terraform은 신규 생성용 태스크 정의를 관리하며 활성 ECS 서비스 revision은 앱 배포 workflow가 관리한다.
+앱 저장소의 `preprod`·`main` push는 각각 preprod·prod 이미지를 빌드해 ECS에 자동 배포한다. prod 역할은 `main` 전용 `prod-deploy` 환경을 통해서만 수임한다. 앱 역할은 각 환경의 ECR 저장소·ECS 서비스에만 접근한다. Terraform은 신규 생성용 태스크 정의를 관리하며 활성 ECS 서비스 revision은 앱 배포 workflow가 관리한다.
 
 ## GitHub 설정
 
@@ -30,7 +30,7 @@
 | Secret | `CLIENT_VPN_SERVER_CERTIFICATE_ARN` | `scripts/preprod-client-vpn.sh prepare` 출력 |
 | Variable | `AWS_REGION` | `ap-northeast-2` |
 
-계정 ID와 state 버킷은 공개 Actions 로그에서 가리도록 secret으로 둔다. 환경 보호 규칙과 변수의 기대값은 [`scripts/check-github-settings.sh`](scripts/check-github-settings.sh)가 기준이다. 앱 저장소는 자체 `AWS_ACCOUNT_ID` secret과 main 전용 `prod-deploy` 승인 환경을 사용한다. 앱 리전은 workflow에 지정한다.
+계정 ID와 state 버킷은 공개 Actions 로그에서 가리도록 secret으로 둔다. 환경 보호 규칙과 변수의 기대값은 [`scripts/check-github-settings.sh`](scripts/check-github-settings.sh)가 기준이다. 앱 저장소는 자체 `AWS_ACCOUNT_ID` secret과 main 전용 `prod-deploy` 환경을 사용한다. 앱 리전은 workflow에 지정한다.
 
 ## 적용 상태 확인
 

@@ -12,7 +12,7 @@
 | 콘솔 비밀번호, MFA 장치 | 사용자 본인 | IAM 콘솔 |
 | `bandal.dev`의 `aws` NS 위임 레코드 | 사용자 본인 | Vercel 대시보드([4절의 도메인 위임](#도메인-위임)) |
 
-인프라 PR CI는 apply하지 않는다. 인프라 main merge만으로 배포가 시작되지 않는다. 앱 저장소의 preprod push는 자동 배포하고, main push는 prod 승인 대기 workflow를 자동 시작한다.
+인프라 PR CI는 apply하지 않는다. 인프라 main merge만으로 배포가 시작되지 않는다. 앱 저장소의 preprod·main push는 각각 해당 환경에 자동 배포된다.
 
 ## 1. 로컬 인증
 
@@ -99,9 +99,9 @@ PR에서는 두 환경의 plan 요약과 바뀐 인프라 파일이 PR 댓글 �
 
 ### 앱 배포
 
-[앱 저장소](https://github.com/ban-dal/aws-ecs-fullstack-web)의 PR에서는 타입 검사·arm64 컨테이너 빌드와 health를 확인한다. `preprod` push는 preprod ECR·ECS에 자동 배포한다. `main` push는 prod workflow를 자동 시작하고 `prod-deploy` 환경 승인 후 prod ECR·ECS에 배포한다. prod는 preprod에서 검증한 코드를 main에 반영해 배포한다. 이미지 태그는 환경별로 불변이며 해당 환경 역할만 push할 수 있다.
+[앱 저장소](https://github.com/ban-dal/aws-ecs-fullstack-web)의 PR에서는 타입 검사·arm64 컨테이너 빌드와 health를 확인한다. `preprod` push는 preprod ECR·ECS에, `main` push는 prod ECR·ECS에 자동 배포한다. prod는 preprod에서 검증한 코드를 main에 반영해 배포한다. `prod-deploy` 환경은 main만 허용하고 사람의 승인은 요구하지 않는다. 이미지 태그는 환경별로 불변이며 해당 환경 역할만 push할 수 있다.
 
-최초 전환 순서는 인프라 bootstrap IAM 적용 → 두 환경 `Apply service foundation`으로 ECR 정책 갱신 → 앱 저장소의 `preprod` 브랜치 생성·push다. prod 기반 리소스를 준비한 뒤 main에 반영하면 prod workflow가 시작된다. 서비스가 중지돼 태스크 수가 기대값과 다르거나 이미 배포 중이면 앱 workflow는 변경하지 않고 실패한다. Terraform은 신규 생성용 task definition을 유지하지만 서비스의 활성 revision은 앱 workflow가 선택하므로, 기반 인프라 apply가 앱 버전을 되돌리지 않는다. 작업 중인 기반 apply와 앱 배포는 동시에 실행하지 않는다.
+최초 전환 순서는 인프라 bootstrap IAM 적용 → 두 환경 `Apply service foundation`으로 ECR 정책 갱신 → 앱 저장소의 `preprod` 브랜치 생성·push다. prod 기반 리소스를 준비한 뒤 main에 반영하면 prod도 배포된다. 서비스가 중지돼 태스크 수가 기대값과 다르거나 이미 배포 중이면 앱 workflow는 변경하지 않고 실패한다. Terraform은 신규 생성용 task definition을 유지하지만 서비스의 활성 revision은 앱 workflow가 선택하므로, 기반 인프라 apply가 앱 버전을 되돌리지 않는다. 작업 중인 기반 apply와 앱 배포는 동시에 실행하지 않는다.
 
 앱 롤백은 앱 저장소에서 이전 코드를 새 commit으로 되돌려 해당 환경 workflow를 다시 실행한다. ECR은 최근 5개 이미지만 유지하므로 오래된 SHA의 재배포를 보장하지 않는다. preprod는 호스트 한 대의 고정 포트 때문에 교체 중 잠시 응답이 끊길 수 있다.
 
