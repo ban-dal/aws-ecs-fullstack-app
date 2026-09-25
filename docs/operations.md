@@ -6,7 +6,7 @@
 
 | 대상 | 적용 주체 | 경로 |
 | --- | --- | --- |
-| 서비스 기반 (`infra/environments/<환경>`: VPC·보안 그룹·ECR 저장소·preprod ECS) | 두 환경 공통 GitHub apply 역할 | [4절](#4-서비스-기반-적용)의 `Apply service foundation` |
+| 서비스 기반 (`infra/environments/<환경>`: VPC·ECR·preprod VPN 앱·prod HTTPS 앱) | 두 환경 공통 GitHub apply 역할 | [4절](#4-서비스-기반-적용)의 `Apply service foundation` |
 | 앱 이미지 (preprod·prod ECR) | 공통 GitHub image 역할 | [이미지 빌드](#이미지-빌드)의 `Build image` |
 | bootstrap 전체 | 운영 역할 `aws-fullstack-lab-bootstrap-operator` | [2절](#2-bootstrap-변경-적용)의 `scripts/bootstrap.sh` |
 | 콘솔 비밀번호, MFA 장치 | 사용자 본인 | IAM 콘솔 |
@@ -112,6 +112,17 @@ PR에서는 두 환경의 plan 요약과 바뀐 인프라 파일이 PR 댓글 �
 
 장기간 사용하지 않을 때는 VPN 앱에서 연결을 끊고 `scripts/preprod-client-vpn.sh suspend`를 실행한다. 태스크와 호스트를 0대로 줄이고 대상 서브넷 연결을 해제하므로 Terraform state와 차이가 생긴다. 다시 사용할 때는 preprod 적용 workflow의 새 plan에서 서브넷 연결 재생성과 호스트·태스크 1대 복구를 확인하고 적용한다.
 
+### prod 공개 HTTPS 앱
+
+`aws.bandal.dev`는 prod의 ALB를 가리킨다. ACM은 같은 공개 Route 53 영역에 DNS 검증 레코드를 남겨 자동 갱신한다. 첫 prod 태스크는 preprod에 지정된 이미지 태그를 사용한다.
+
+1. [도메인 위임](#도메인-위임)과 prod ECR에 해당 이미지 태그가 있는지 확인한다. [이미지 빌드](#이미지-빌드)의 성공 실행 기록에서 prod 저장소 push 결과를 확인한다.
+2. PR의 prod plan에 ACM 인증서·검증 레코드, ALB·리스너·대상 그룹, ECS 호스트 두 대·서비스, Route 53 A alias 생성만 있는지 확인한다. 비용은 [6절](#6-비용-관리)을 본다.
+3. merge 후 `main`에서 `Apply service foundation`의 **prod**를 선택한다. plan을 검토하고 `prod-apply` 승인을 완료한다. 인증서 검증과 두 호스트의 시작 때문에 적용이 몇 분 걸릴 수 있다.
+4. 적용 후 `scripts/prod-service.sh check`를 실행한다. ECS 태스크와 ALB 정상 대상이 각각 2/2인지, `https://aws.bandal.dev/api/health`가 `prod`를 반환하는지 확인한다. HTTP는 HTTPS로 이동해야 한다.
+
+사용하지 않을 때는 운영 역할로 `scripts/prod-service.sh suspend`를 실행한다. 태스크·호스트를 0대로 줄이고 ALB를 삭제해 주요 시간당 비용을 멈춘다. DNS alias는 다음 적용 전까지 이전 ALB를 가리키므로 사이트는 응답하지 않는다. Terraform state와 차이가 생기며, 재개할 때는 prod 적용 workflow의 새 plan에서 ALB 재생성·DNS 갱신·호스트·태스크 복구만 있는지 확인한 뒤 승인한다. 로그·ECR 저장 비용은 계속 발생한다.
+
 ### 도메인 위임
 
 `bandal.dev`는 Vercel에서 등록했고 DNS도 Vercel이 관리한다. 서비스 주소에는 하위 도메인 `aws.bandal.dev`만 Route 53 영역(`modules/route53-zone`)으로 위임한다. Vercel의 `*` ALIAS와 CAA 레코드는 바꾸지 않는다. 명시적인 NS 위임이 와일드카드보다 우선하고, CAA는 이 영역에 따로 둔다.
@@ -171,10 +182,13 @@ PR에서는 두 환경의 plan 요약과 바뀐 인프라 파일이 PR 댓글 �
 - Route 53 호스팅 영역은 월 $0.50이다. 퍼블릭 IPv4, EC2, ALB도 과금 대상이다. 추가하는 PR에서 서울 리전 요금으로 비용을 계산하고, 공개 앱은 기본적으로 끈다. NAT Gateway는 쓰지 않는다.
 - preprod 호스트는 `t4g.small` 1대, 30 GiB gp3 EBS, 공개 IPv4 1개와 CloudWatch 로그를 쓴다. 24시간 가동 시 EC2 정가 약 $15/월, IPv4 약 $3.65/월, EBS 약 $3~4/월에 로그·전송량이 더해진다. AWS의 `t4g.small` 월 750시간 체험이 2026년 말까지 해당 계정에 적용되면 EC2 사용액은 줄지만, 실제 Free plan 크레딧·체험 잔량은 Billing에서 확인한다.
 - preprod를 쉬게 할 때 `scripts/preprod-client-vpn.sh suspend`는 VPN 연결 시간 과금을 멈추고 EBS와 공개 IP도 호스트 종료와 함께 해제한다. 로그·ECR 저장 비용은 남는다.
+- prod를 24시간 켜면 서울 리전 ALB 기본요금 $0.0225/시간(30일 약 $16.20), `t4g.small` 두 대 약 $30/월, 호스트와 ALB의 공개 IPv4 네 개 약 $14.40/월, 30 GiB gp3 EBS 두 개 약 $6~8/월을 예상한다. 합계 약 $67~69/월에 ALB LCU·로그·전송량·세금이 더해진다. ALB LCU는 $0.008/LCU-시간이다. 계정의 T4g 체험·Free plan 크레딧이 적용되면 실제 청구액은 줄 수 있다. [AWS ALB 요금](https://aws.amazon.com/elasticloadbalancing/pricing/), [AWS 공개 IPv4 요금](https://aws.amazon.com/vpc/pricing/) 및 Billing에서 확인한다.
+- `scripts/prod-service.sh suspend`는 ALB와 호스트의 시간당 과금을 멈춘다. 상태에 남은 리소스와 DNS alias는 다음 prod 적용 workflow가 복구한다.
 
 ## 7. 종료·롤백·복구
 
 - preprod 일시 중지: `scripts/preprod-client-vpn.sh suspend`. 다시 쓸 때는 preprod 적용 workflow를 실행한다.
+- prod 일시 중지: `scripts/prod-service.sh suspend`. 다시 쓸 때는 prod 적용 workflow를 실행한다.
 - 서비스 기반 완전 종료: ECS·ALB 등 종속 리소스를 먼저 없앤다. ECR은 `force_delete=false`이므로 이미지를 비운 뒤 삭제한다. 현재 workflow에는 destroy 경로가 없으므로 환경별 `terraform plan -destroy`를 검토하는 별도 절차를 PR로 만든다.
 - bootstrap 롤백: 되돌리는 PR을 merge한 뒤 [2절](#2-bootstrap-변경-적용)로 적용하고, 바뀐 GitHub 변수를 되돌린다.
 - Terraform 오류: 마지막 성공 state의 S3 버전을 확인하고 state를 손으로 고치지 않는다. `terraform plan`으로 선언과 실제의 차이를 먼저 본다.

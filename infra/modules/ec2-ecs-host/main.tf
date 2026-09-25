@@ -1,6 +1,10 @@
-# 단일 AZ의 ECS 호스트다. NAT와 ALB 없이 ECR·SSM에 나가야 하므로 공개 서브넷에
-# 명시적으로 IPv4를 할당한다. 공개 수신은 열지 않고 앱은 AWS Client VPN에서만 받는다.
+# ECS 호스트다. preprod는 한 AZ, prod는 두 AZ에 둔다. NAT 없이 ECR·SSM에
+# 나가야 하므로 공개 서브넷에 IPv4를 명시적으로 할당하지만 공개 수신은 열지 않는다.
 # ARM64 ECS AMI는 EC2 이미지 조회로 찾는다.
+locals {
+  subnet_ids = var.public_subnet_ids != null ? var.public_subnet_ids : [var.public_subnet_id]
+}
+
 data "aws_ami" "ecs" {
   most_recent = true
   owners      = ["amazon"]
@@ -31,7 +35,8 @@ resource "aws_launch_template" "this" {
   }
 
   metadata_options {
-    http_tokens = "required"
+    http_tokens                 = "required"
+    http_put_response_hop_limit = var.imds_hop_limit
   }
 
   # 지속적인 고 CPU 사용에서 Unlimited 잉여 크레딧 요금이 붙지 않게 한다.
@@ -71,10 +76,10 @@ resource "aws_launch_template" "this" {
 
 resource "aws_autoscaling_group" "this" {
   name                = "${var.name_prefix}-ecs"
-  min_size            = 1
-  max_size            = 1
-  desired_capacity    = 1
-  vpc_zone_identifier = [var.public_subnet_id]
+  min_size            = var.host_count
+  max_size            = var.host_count
+  desired_capacity    = var.host_count
+  vpc_zone_identifier = local.subnet_ids
 
   launch_template {
     id      = aws_launch_template.this.id
@@ -82,11 +87,11 @@ resource "aws_autoscaling_group" "this" {
   }
 
   # launch template이 바뀌면(AMI, user data, 보안 그룹) 실행 중인 호스트도 교체한다.
-  # 호스트가 한 대라 먼저 내리고 새로 올리므로 교체하는 동안 앱이 끊긴다.
+  # 한 대면 교체 중 중단되고, 두 대면 한 대를 유지하며 교체한다.
   instance_refresh {
     strategy = "Rolling"
     preferences {
-      min_healthy_percentage = 0
+      min_healthy_percentage = var.host_count == 1 ? 0 : 50
     }
   }
 
