@@ -8,7 +8,7 @@ AI를 활용해 기획, 디자인, 개발, 인프라와 운영을 하나의 저�
 
 | 사용자 | 원하는 일 | 완료 기준 |
 | --- | --- | --- |
-| 방문자 | prod에서 HTTPS로 앱 열기 | 페이지 로드와 `/api/health` 응답 |
+| 방문자 | prod에서 HTTPS로 앱 열고 ALB 뒤 응답 호스트 확인 | 페이지 로드와 `/api/health` 응답, 요청 경로·EC2 인스턴스·ECS 태스크 관측 |
 | 개발자 | 로컬에서 기능 개발 | `pnpm dev`, 타입 검사, 빌드 가능 |
 | 리뷰어 | PR의 앱·인프라 영향 파악 | 빌드, fmt, validate, 환경별 plan 확인 |
 | 운영자 | preprod 확인 후 실험용 prod 승격 | merge 후 preprod, 승인 후 prod 배포 및 종료 가능 |
@@ -18,6 +18,7 @@ AI를 활용해 기획, 디자인, 개발, 인프라와 운영을 하나의 저�
 적용 상태는 [README](../README.md#적용-상태-확인)를 본다.
 
 - 실행 가능한 Next.js 앱, Node.js 22, pnpm workspaces, health API와 앱 CI.
+- 홈의 요청 관측 대시보드. prod에서 접속 프로토콜, ALB 추적 헤더, 응답한 ECS 태스크·EC2 호스트·가용 영역을 표시하고 요청 표본을 비교한다. 이는 서비스 전체 상태 점검이 아닌 해당 브라우저의 요청 기록이다.
 - Terraform 원격 state, GitHub OIDC 역할, 선택형 비용 Budget, 사람의 비루트 운영 역할.
 - PR의 fmt·validate와 `preprod`·`prod` plan, `main`에서만 실행하는 보호된 환경별 apply.
 - 환경별 VPC, 공개·비공개 서브넷, 보안 그룹, 비공개 ECR.
