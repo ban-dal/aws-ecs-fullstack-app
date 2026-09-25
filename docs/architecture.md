@@ -66,7 +66,7 @@ prod 홈 화면과 `/api/backend`는 요청의 Host, `X-Forwarded-Proto`, `X-Amz
 권한 정책이 무엇을 허용하고 거부해야 하는지는 [`infra/bootstrap/tests/`](../infra/bootstrap/tests/iam.test.mjs)의 테스트가 기준이다. bootstrap을 적용할 때마다 `scripts/bootstrap.sh plan`이 이 테스트를 실행한다.
 
 - **state 버킷** ([`s3-terraform-state`](../infra/modules/s3-terraform-state/main.tf)): 공개 접근 차단, HTTPS 강제, 암호화, 버전 관리.
-- **GitHub OIDC 역할** ([`iam`](../infra/modules/iam/main.tf)): 각 저장소의 immutable subject를 사용한다. 인프라 plan은 `ReadOnlyAccess`, apply는 `PowerUserAccess`와 공통 ECS 역할로 제한한 `iam:PassRole`을 가진다. 앱 저장소의 preprod·prod 역할은 각 ECR 저장소·ECS 서비스에만 쓴다. prod 역할은 앱 저장소의 main 전용 승인 환경만 신뢰한다. plan 역할은 승인 없이 PR 브랜치 코드도 받으므로 쓰기 역할과 합치지 않는다.
+- **GitHub OIDC 역할** ([`iam`](../infra/modules/iam/main.tf)): 각 저장소의 immutable subject를 사용한다. 인프라 plan은 `ReadOnlyAccess`, apply는 `PowerUserAccess`와 공통 ECS 역할로 제한한 `iam:PassRole`을 가진다. 앱 저장소의 preprod·prod 역할은 각 ECR 저장소·ECS 서비스에만 쓴다. prod 역할은 앱 저장소의 main 전용 `prod-deploy` 환경만 신뢰한다. plan 역할은 승인 없이 PR 브랜치 코드도 받으므로 쓰기 역할과 합치지 않는다.
 - **환경 경계**: 두 환경의 Terraform 루트와 state key는 분리하지만 IAM 역할은 공유한다. apply 역할은 IAM과 bootstrap의 state 버킷·감사 trail을 뺀 계정의 모든 리소스를 변경할 수 있다. main 전용 `*-apply` 환경, prod 승인과 저장 plan 비교로 적용 작업을 통제하며, 이 방식은 환경 간 IAM 격리나 IAM 비용 상한을 제공하지 않는다.
 - **ECS 역할** ([`iam`](../infra/modules/iam/main.tf)): 두 환경이 호스트 역할과 태스크 실행 역할을 공유한다. apply는 이 두 역할만 정해진 서비스에 넘길 수 있고, 태스크 실행 역할은 두 환경 저장소 pull과 로그 쓰기만 할 수 있다.
 - **사람의 운영 역할** ([`iam`](../infra/modules/iam/main.tf)): MFA 세션만 신뢰하는 계정 관리자 역할이다. bootstrap 운영에 쓰고 일상 배포는 GitHub 역할을 쓴다.
