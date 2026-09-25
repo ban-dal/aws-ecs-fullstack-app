@@ -10,8 +10,7 @@ locals {
   # 두 환경의 VPC CIDR은 겹치지 않게 둔다(preprod 10.60.0.0/16, prod 10.61.0.0/16).
   vpc_cidr = "10.61.0.0/16"
 
-  # 태그는 provider default_tags 대신 각 리소스에 명시한다. Environment 태그는 적용
-  # 역할의 권한 조건이므로 모든 리소스에 빠짐없이 있어야 한다.
+  # 태그는 provider default_tags 대신 각 리소스에 명시한다.
   tags = {
     Project     = "aws-fullstack-lab"
     Environment = local.environment

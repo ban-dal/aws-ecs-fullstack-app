@@ -14,6 +14,9 @@ locals {
 
   host_role_arn      = "arn:aws:iam::${var.account_id}:role/aws-fullstack-lab-ecs-host"
   execution_role_arn = "arn:aws:iam::${var.account_id}:role/aws-fullstack-lab-ecs-task-execution"
+  environment_role_arns = [for environment in var.environments :
+  "arn:aws:iam::${var.account_id}:role/aws-fullstack-lab-${environment}-*"]
+  power_user_arn = "arn:aws:iam::aws:policy/PowerUserAccess"
 }
 
 # OIDC subject는 immutable repository ID와 GitHub 환경 또는 main 브랜치로 제한한다.
@@ -52,65 +55,65 @@ resource "aws_iam_role" "github" {
   tags                 = { Project = "aws-fullstack-lab", Purpose = each.key }
 }
 
-# 계정의 첫 AWS Client VPN 엔드포인트는 서비스 연결 역할을 자동 생성하려 한다.
-# GitHub apply 역할에 IAM 생성 권한을 주지 않도록 bootstrap에서 한 번 만든다.
+# Client VPN 서비스 연결 역할은 apply 역할에 생성 권한이 없던 때 bootstrap에서 만들었다.
+# 새 서비스 연결 역할은 apply 역할이 PowerUserAccess로 만든다.
 resource "aws_iam_service_linked_role" "client_vpn" {
   aws_service_name = "clientvpn.amazonaws.com"
 }
 
-# plan은 두 환경 state 본문을 읽고 각 lock 객체만 변경한다. 서비스 refresh는 조회만 한다.
+# plan은 ReadOnlyAccess로 서비스와 state를 조회하고, 두 환경의 lock 객체만 쓴다.
+# 새 서비스를 추가해도 plan 권한을 고치지 않도록 서비스별 조회 목록을 두지 않는다.
+# PR 브랜치 코드가 이 역할로 실행되므로 bootstrap state는 읽지 못하게 막는다.
 data "aws_iam_policy_document" "plan" {
-  statement {
-    actions   = ["s3:ListBucket"]
-    resources = [var.state_bucket_arn]
-  }
-  statement {
-    actions   = ["s3:GetObject"]
-    resources = [for environment in var.environments : "${var.state_bucket_arn}/${environment}/terraform.tfstate"]
-  }
   statement {
     actions   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
     resources = [for environment in var.environments : "${var.state_bucket_arn}/${environment}/terraform.tfstate.tflock"]
   }
   statement {
-    actions = [
-      "autoscaling:Describe*", "ec2:Describe*", "ecs:Describe*", "ecs:List*",
-      "logs:Describe*", "logs:ListTagsForResource", "logs:ListTagsLogGroup",
-    ]
-    resources = ["*"]
-  }
-  statement {
-    actions   = ["ecr:DescribeRepositories", "ecr:GetLifecyclePolicy", "ecr:ListTagsForResource"]
-    resources = local.repository_arns
+    effect    = "Deny"
+    actions   = ["s3:*"]
+    resources = ["${var.state_bucket_arn}/bootstrap/*"]
   }
 }
 
-# apply는 프로젝트 서비스의 변경 권한을 넓게 가진다. state·ECR·PassRole만 대상 제한을 둔다.
-# 비용 상한은 IAM에 두지 않으며 Budget은 알림만 보낸다.
+# apply는 PowerUserAccess로 IAM·Organizations·계정 설정을 뺀 모든 서비스를 변경한다.
+# TerraformIamAccess는 환경 루트에 필요한 IAM만 연다. 비용 상한은 IAM에 두지 않으며
+# Budget은 알림만 보낸다.
 data "aws_iam_policy_document" "apply" {
+  # Terraform refresh가 역할·정책을 읽는다.
   statement {
-    actions   = ["s3:ListBucket"]
-    resources = [var.state_bucket_arn]
-  }
-  statement {
-    actions   = ["s3:GetObject", "s3:PutObject"]
-    resources = [for environment in var.environments : "${var.state_bucket_arn}/${environment}/terraform.tfstate"]
-  }
-  statement {
-    actions   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
-    resources = [for environment in var.environments : "${var.state_bucket_arn}/${environment}/terraform.tfstate.tflock"]
-  }
-  statement {
-    actions   = ["autoscaling:*", "ec2:*", "ecs:*", "logs:*"]
+    actions   = ["iam:Get*", "iam:List*"]
     resources = ["*"]
+  }
+  # 환경 루트가 만드는 역할(예: 앱 태스크 역할)은 PowerUserAccess를 권한 경계로 붙여야 한다.
+  # 경계가 IAM 변경을 막으므로 새 역할을 거쳐 apply보다 넓은 권한을 얻을 수 없다.
+  statement {
+    actions = [
+      "iam:AttachRolePolicy", "iam:CreateRole", "iam:DeleteRolePolicy",
+      "iam:DetachRolePolicy", "iam:PutRolePermissionsBoundary", "iam:PutRolePolicy",
+    ]
+    resources = local.environment_role_arns
+    condition {
+      test     = "StringEquals"
+      variable = "iam:PermissionsBoundary"
+      values   = [local.power_user_arn]
+    }
   }
   statement {
     actions = [
-      "ecr:CreateRepository", "ecr:DeleteLifecyclePolicy", "ecr:DeleteRepository",
-      "ecr:DescribeRepositories", "ecr:GetLifecyclePolicy", "ecr:ListTagsForResource",
-      "ecr:PutImageTagMutability", "ecr:PutLifecyclePolicy", "ecr:TagResource", "ecr:UntagResource",
+      "iam:DeleteRole", "iam:TagRole", "iam:UntagRole",
+      "iam:UpdateAssumeRolePolicy", "iam:UpdateRole", "iam:UpdateRoleDescription",
     ]
-    resources = local.repository_arns
+    resources = local.environment_role_arns
+  }
+  statement {
+    actions   = ["iam:PassRole"]
+    resources = local.environment_role_arns
+    condition {
+      test     = "StringEquals"
+      variable = "iam:PassedToService"
+      values   = ["ecs-tasks.amazonaws.com"]
+    }
   }
   statement {
     actions   = ["iam:PassRole"]
@@ -150,13 +153,19 @@ data "aws_iam_policy_document" "image" {
 
 resource "aws_iam_role_policy" "github" {
   for_each = local.github_subjects
-  name     = { plan = "terraform-plan-read", apply = "terraform-foundation-apply", image = "ecr-image-push" }[each.key]
+  name     = { plan = "terraform-plan-read", apply = "TerraformIamAccess", image = "ecr-image-push" }[each.key]
   role     = aws_iam_role.github[each.key].name
   policy = {
     plan  = data.aws_iam_policy_document.plan.json
     apply = data.aws_iam_policy_document.apply.json
     image = data.aws_iam_policy_document.image.json
   }[each.key]
+}
+
+resource "aws_iam_role_policy_attachment" "github" {
+  for_each   = { plan = "arn:aws:iam::aws:policy/ReadOnlyAccess", apply = local.power_user_arn }
+  role       = aws_iam_role.github[each.key].name
+  policy_arn = each.value
 }
 
 # 사람은 IAM 사용자로 로그인하고 MFA 세션으로 운영 역할 하나를 수임한다.
@@ -305,7 +314,7 @@ resource "aws_iam_role_policy" "ecs_execution" {
   policy = data.aws_iam_policy_document.ecs_execution.json
 }
 
-# apply 역할에 IAM 생성 권한을 주지 않도록 서비스 연결 역할은 bootstrap에서 미리 만든다.
+# apply 역할에 생성 권한이 없던 때 bootstrap에서 미리 만든 서비스 연결 역할이다.
 resource "aws_iam_service_linked_role" "this" {
   for_each         = toset(["autoscaling.amazonaws.com", "ecs.amazonaws.com"])
   aws_service_name = each.value

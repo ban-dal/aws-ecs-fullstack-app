@@ -27,7 +27,7 @@ infra/
 
 ## 규칙
 
-- **bootstrap과 환경 루트를 나눈다.** `bootstrap`은 GitHub 역할 자체를 만들므로 사람이 적용하고, 환경 루트는 공통 GitHub apply 역할이 적용한다. apply 역할은 ECS 역할을 넘길 수 있지만 IAM 역할을 만들거나 고칠 수 없다.
+- **bootstrap과 환경 루트를 나눈다.** `bootstrap`은 GitHub 역할 자체를 만들므로 사람이 적용하고, 환경 루트는 공통 GitHub apply 역할이 적용한다. apply 역할은 공통 ECS 역할을 넘길 수 있고, 환경 루트의 IAM 역할은 `aws-fullstack-lab-<환경>-` 이름과 `PowerUserAccess` 권한 경계(`permissions_boundary`)를 붙여야 만들 수 있다.
 - **환경마다 루트를 둔다.** preprod와 prod는 같은 모듈을 쓰지만 구성이 다르다(예: preprod는 단일 호스트와 IP 허용 목록). 조건문으로 한 루트에 섞지 않고, 각 환경의 `main.tf`가 그 환경의 구성을 그대로 보여 주게 한다. 두 환경에 공통인 변경은 두 루트를 같은 PR에서 고친다.
 - **모듈 폴더 이름은 `<AWS 서비스>-<기능>`을 소문자 dash-case로 쓴다.** IAM처럼 한 서비스의 접근 경로를 함께 관리할 때는 서비스 이름만 쓴다(`iam`, `vpc`, `budgets`). 새 모듈도 같은 규칙을 따른다. 예: `alb`, `acm`, `route53`, `ecs-cluster`, `ecs-service`, `lambda`.
 - **모듈에는 `main.tf`, `variables.tf`, `outputs.tf` 세 파일만 둔다.** `main.tf` 맨 위 주석에 무엇을 왜 두는지 쓰고, locals도 `main.tf`에 둔다. 모듈은 파일 길이보다 적용 주체와 함께 변경해야 하는 경계를 기준으로 나눈다.
