@@ -58,4 +58,14 @@ resource "aws_ecs_service" "web" {
   deployment_minimum_healthy_percent = 0
   deployment_maximum_percent         = 100
   tags                               = var.tags
+
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
+  }
+
+  # 앱 저장소 workflow가 active revision을 바꾼다. 기반 apply에서 이를 되돌리지 않는다.
+  lifecycle {
+    ignore_changes = [task_definition]
+  }
 }

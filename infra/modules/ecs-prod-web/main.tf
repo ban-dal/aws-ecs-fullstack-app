@@ -82,4 +82,9 @@ resource "aws_ecs_service" "web" {
   }
 
   tags = var.tags
+
+  # 앱 저장소 workflow가 active revision을 바꾼다. 기반 apply에서 이를 되돌리지 않는다.
+  lifecycle {
+    ignore_changes = [task_definition]
+  }
 }

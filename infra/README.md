@@ -22,7 +22,7 @@ infra/
 | [`ecs-cluster`](modules/ecs-cluster/main.tf) | ECS 클러스터 | preprod, prod |
 | [`ecs-preprod-web`](modules/ecs-preprod-web/main.tf) | 앱 태스크·서비스·로그 | preprod |
 | [`ecs-prod-web`](modules/ecs-prod-web/main.tf) | prod 앱 태스크·서비스·로그 | prod |
-| [`iam`](modules/iam/main.tf) | GitHub OIDC, 공통 plan·apply·image 역할, 사람의 MFA 운영 역할, 공통 ECS 역할 | bootstrap |
+| [`iam`](modules/iam/main.tf) | 두 저장소의 GitHub OIDC, 인프라 plan·apply와 환경별 앱 배포 역할, 사람의 MFA 운영 역할, 공통 ECS 역할 | bootstrap |
 | [`route53-zone`](modules/route53-zone/main.tf) | 서비스 도메인 `aws.bandal.dev` 영역과 CAA | bootstrap |
 | [`route53-alias`](modules/route53-alias/main.tf) | 서비스 주소를 prod ALB에 연결 | prod |
 | [`s3-terraform-state`](modules/s3-terraform-state/main.tf) | Terraform state 버킷 | bootstrap |
