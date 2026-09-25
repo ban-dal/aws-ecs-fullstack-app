@@ -87,7 +87,7 @@ for (const environment of ["preprod", "prod"]) {
 
     test(`${environment} 앱 역할은 해당 ECS 서비스 배포를 허용하고 다른 서비스 변경을 거부한다`, async () => {
       const other = environment === "preprod" ? "prod" : "preprod";
-      const service = (env) => `arn:aws:ecs:${region}:${account}:service/aws-fullstack-lab-${env}/web`;
+      const service = (env) => `arn:aws:ecs:${region}:${account}:service/aws-fullstack-lab-${env}-cluster/web`;
       const taskDefinition = (env) => `arn:aws:ecs:${region}:${account}:task-definition/aws-fullstack-lab-${env}-web:1`;
       assert.equal(await decide(appRoles[environment], "ecs:UpdateService", service(environment)), "allowed");
       assert.equal(await decide(appRoles[environment], "ecs:UpdateService", service(other)), "implicitDeny");

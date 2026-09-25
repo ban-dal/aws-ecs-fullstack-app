@@ -145,7 +145,7 @@ data "aws_iam_policy_document" "app" {
   }
   statement {
     actions   = ["ecs:DescribeServices", "ecs:UpdateService"]
-    resources = ["arn:aws:ecs:${var.region}:${var.account_id}:service/aws-fullstack-lab-${each.key}/web"]
+    resources = ["arn:aws:ecs:${var.region}:${var.account_id}:service/aws-fullstack-lab-${each.key}-cluster/web"]
   }
   statement {
     actions   = ["ecs:DescribeTaskDefinition"]
