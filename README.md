@@ -64,7 +64,7 @@ terraform -chdir=infra/bootstrap output -raw state_bucket | gh secret set TF_STA
 
 ## 다음 단계
 
-prod 공개 서비스의 배포와 중지는 [운영 가이드](docs/operations.md#prod-공개-https-앱)에 따른다. 다음에는 이미지 승격 흐름과 S3·Lambda 예제를 비용 검토 후 추가한다.
+prod 공개 서비스의 배포와 중지는 [운영 가이드](docs/operations.md#prod-공개-https-앱)에 따른다. 다음에는 S3·Lambda 예제를 비용 검토 후 추가한다.
 
 ## 문서
 

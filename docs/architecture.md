@@ -52,7 +52,7 @@ flowchart LR
   Approval --> Apply[선택한 환경 apply]
 ```
 
-이미지는 main에서 한 번 빌드해 두 환경 저장소에 같은 commit SHA 태그로 올린다. 첫 prod 배포는 preprod에 지정된 고정 이미지 태그를 쓴다. 이후 승격할 태그를 두 환경에서 같은 값으로 바꾼다. preprod는 Client VPN에서 호스트 사설 IP의 고정 앱 포트로만 들어오고, prod는 bridge 네트워크의 동적 호스트 포트를 쓴다. prod ALB 대상 그룹은 instance 유형이고 prod EC2 보안 그룹은 ALB 보안 그룹에서 오는 임시 포트만 연다.
+이미지는 main에서 한 번 빌드해 두 환경 저장소에 같은 commit SHA 태그로 올린다. 각 환경 루트의 `image_tag`가 실제 실행할 이미지를 고른다. prod 승격 시 main 이미지 push 성공을 확인한 뒤 prod 태그만 바꾸고, PR의 교체·서비스 수정 plan을 검토해 적용한다. preprod는 Client VPN에서 호스트 사설 IP의 고정 앱 포트로만 들어오고, prod는 bridge 네트워크의 동적 호스트 포트를 쓴다. prod ALB 대상 그룹은 instance 유형이고 prod EC2 보안 그룹은 ALB 보안 그룹에서 오는 임시 포트만 연다.
 
 ## 요청 경로 관측
 
@@ -70,4 +70,4 @@ prod 홈 화면과 `/api/backend`는 요청의 Host, `X-Forwarded-Proto`, `X-Amz
 - **ECS 역할** ([`iam`](../infra/modules/iam/main.tf)): 두 환경이 호스트 역할과 태스크 실행 역할을 공유한다. apply는 이 두 역할만 정해진 서비스에 넘길 수 있고, 태스크 실행 역할은 두 환경 저장소 pull과 로그 쓰기만 할 수 있다.
 - **사람의 운영 역할** ([`iam`](../infra/modules/iam/main.tf)): MFA 세션만 신뢰하는 계정 관리자 역할이다. bootstrap 운영에 쓰고 일상 배포는 GitHub 역할을 쓴다.
 - **GitHub 환경 승인** ([`scripts/check-github-settings.sh`](../scripts/check-github-settings.sh)): `prod-apply`에만 필수 승인을 두고, 1인 저장소라 자기 승인을 허용한다. 두 `*-apply` 환경은 `main`에서만 배포한다.
-- **적용 workflow** ([`apply-foundation.yml`](../.github/workflows/apply-foundation.yml), [`scripts/tfplan.sh`](../scripts/tfplan.sh)): 승인한 plan과 같은 변경만 적용한다. 삭제·교체는 막으며, destroy 경로는 아직 없다.
+- **적용 workflow** ([`apply-foundation.yml`](../.github/workflows/apply-foundation.yml), [`scripts/tfplan.sh`](../scripts/tfplan.sh)): 승인한 plan과 같은 변경만 적용한다. prod 웹 태스크 정의의 컨테이너 변경은 새 revision을 먼저 만드는 교체로 허용하며, 다른 삭제·교체는 막는다. destroy 경로는 아직 없다.

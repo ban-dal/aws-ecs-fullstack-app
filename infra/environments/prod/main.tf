@@ -92,8 +92,8 @@ module "web" {
   account_id     = var.expected_account_id
   region         = var.aws_region
   repository_url = module.ecr_repository.repository_url
-  # preprod에 지정된 첫 이미지와 같은 태그를 prod 저장소에서 사용한다.
-  image_tag        = "757ff359a5bb83c9b5dab18767d5d80f8e876db4"
+  # 요청 관측 대시보드가 포함된 main 이미지다. Build image 실행 성공 후 적용한다.
+  image_tag        = "f98af60d54ad85c79c41bfb2835a25b66d0c833a"
   target_group_arn = module.alb.target_group_arn
   tags             = local.tags
 
@@ -103,9 +103,9 @@ module "web" {
 module "dns" {
   source = "../../modules/route53-alias"
 
+  # DNS는 ALB 주소에만 의존한다. 웹 서비스까지 묶으면 이미지 교체 때
+  # zone data 조회가 apply로 미뤄져 alias 레코드가 불필요하게 교체된다.
   domain_name  = local.domain_name
   alb_dns_name = module.alb.dns_name
   alb_zone_id  = module.alb.zone_id
-
-  depends_on = [module.web]
 }
