@@ -52,7 +52,7 @@ flowchart LR
   Approval --> Apply[선택한 환경 apply]
 ```
 
-이미지는 main에서 한 번 빌드해 두 환경 저장소에 같은 commit SHA 태그로 올린다. 배포는 이 태그를 고르므로 prod에는 preprod와 같은 커밋이 간다. 첫 preprod 배포는 이미 저장소에 있는 이미지를 고정 태그로 사용한다. preprod는 VPN 터널 주소의 고정 앱 포트로만 들어오고, prod는 bridge 네트워크의 동적 호스트 포트를 사용할 예정이다. prod ALB 대상 그룹은 instance 유형이고 prod EC2 보안 그룹은 ALB 보안 그룹에서 오는 임시 포트만 연다.
+이미지는 main에서 한 번 빌드해 두 환경 저장소에 같은 commit SHA 태그로 올린다. 배포는 이 태그를 고르므로 prod에는 preprod와 같은 커밋이 간다. 첫 preprod 배포는 이미 저장소에 있는 이미지를 고정 태그로 사용한다. preprod는 Client VPN에서 호스트 사설 IP의 고정 앱 포트로만 들어오고, prod는 bridge 네트워크의 동적 호스트 포트를 사용할 예정이다. prod ALB 대상 그룹은 instance 유형이고 prod EC2 보안 그룹은 ALB 보안 그룹에서 오는 임시 포트만 연다.
 
 ## 보안과 한계
 
