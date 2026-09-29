@@ -1,8 +1,8 @@
-# preprod 루트: preprod 환경의 서비스 리소스다. merge된 main에서 Apply service foundation
-# workflow로 적용한다. preprod와 prod는 같은 모듈을 쓰되, 환경마다 필요한 구성과 값이
+# preprod 루트: preprod 환경의 서비스 리소스다. merge된 main에서 scripts/infra.sh preprod로
+# 적용한다. preprod와 prod는 같은 모듈을 쓰되, 환경마다 필요한 구성과 값이
 # 다르므로 루트를 나눈다. 환경별 차이는 docs/architecture.md의 환경과 데이터 경계를 따른다.
 # 이 파일에는 모듈 호출과 이 환경의 값만 둔다. 루트에 리소스를 직접 두면 적용
-# workflow 검사(scripts/tfplan.sh)가 막는다.
+# 검사(scripts/tfplan.sh)가 막는다.
 
 locals {
   environment = "preprod"

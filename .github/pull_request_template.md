@@ -8,11 +8,11 @@
 
 ## 검증
 
-<!-- 실행한 검사와 결과. Terraform 변경이면 fmt·validate와 plan 범위(생성·수정·삭제 개수). bootstrap 변경이면 scripts/bootstrap.sh plan의 요약과 정책 테스트 결과. 실행하지 못한 검사와 이유. -->
+<!-- 실행한 검사와 결과. Terraform 변경이면 fmt·validate와 바뀐 루트마다 scripts/infra.sh <루트> plan의 요약(생성·수정·삭제 개수). bootstrap 변경이면 정책 테스트 결과도. 실행하지 못한 검사와 이유. -->
 
 ## 비용·운영 영향
 
-<!-- AWS 비용과 무료 플랜 영향, 종료 방법. merge 후 필요한 운영 작업(bootstrap 적용, GitHub 설정 등). 없으면 "없음". -->
+<!-- AWS 비용과 무료 플랜 영향, 종료 방법. merge 후 필요한 운영 작업(루트별 적용 순서, GitHub 설정 등). 없으면 "없음". -->
 
 ## 남은 사항
 

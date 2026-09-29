@@ -12,10 +12,7 @@ const plan = JSON.parse(readFileSync(process.env.PLAN_JSON, "utf8"));
 const after = Object.fromEntries(plan.resource_changes.map(({ address, change }) => [address, change.after]));
 const account = plan.variables.expected_account_id.value;
 const region = plan.variables.aws_region.value;
-const bucketName = plan.variables.state_bucket_name.value;
-const bucket = `arn:aws:s3:::${bucketName}`;
-const auditBucket = `arn:aws:s3:::${bucketName}-audit`;
-const auditTrail = `arn:aws:cloudtrail:${region}:${account}:trail/aws-fullstack-lab-audit`;
+const bucket = `arn:aws:s3:::${plan.variables.state_bucket_name.value}`;
 const role = (name) => `arn:aws:iam::${account}:role/aws-fullstack-lab-${name}`;
 const repository = (environment) => `arn:aws:ecr:${region}:${account}:repository/aws-fullstack-lab-${environment}-web`;
 
@@ -37,8 +34,6 @@ async function roleDocuments(name) {
   return [...inline, ...(await Promise.all(managed.map(managedPolicy)))];
 }
 
-const planRole = await roleDocuments("aws-fullstack-lab-plan");
-const applyRole = await roleDocuments("aws-fullstack-lab-apply");
 const appRoles = Object.fromEntries(await Promise.all(["preprod", "prod"].map(async (environment) =>
   [environment, await roleDocuments(`aws-fullstack-lab-app-${environment}`)])));
 const executionRole = await roleDocuments("aws-fullstack-lab-ecs-task-execution");
@@ -64,20 +59,6 @@ function trustedSubjects(key) {
 
 for (const environment of ["preprod", "prod"]) {
   describe(`${environment} 공통 역할`, () => {
-    test(`${environment} plan은 state 읽기와 lock 쓰기를 허용하고 state 본문 쓰기를 거부한다`, async () => {
-      const state = `${bucket}/${environment}/terraform.tfstate`;
-      assert.equal(await decide(planRole, "s3:GetObject", state), "allowed");
-      assert.equal(await decide(planRole, "s3:PutObject", `${state}.tflock`), "allowed");
-      assert.equal(await decide(planRole, "s3:PutObject", state), "implicitDeny");
-    });
-
-    test(`${environment} apply는 state 쓰기를 허용하고 state 이전 버전 삭제를 거부한다`, async () => {
-      const state = `${bucket}/${environment}/terraform.tfstate`;
-      assert.equal(await decide(applyRole, "s3:PutObject", state), "allowed");
-      assert.equal(await decide(applyRole, "s3:DeleteObject", `${state}.tflock`), "allowed");
-      assert.equal(await decide(applyRole, "s3:DeleteObjectVersion", state), "explicitDeny");
-    });
-
     test(`${environment} 앱 역할은 해당 환경 이미지 push를 허용하고 다른 환경 push를 거부한다`, async () => {
       const other = environment === "preprod" ? "prod" : "preprod";
       assert.equal(await decide(appRoles[environment], "ecr:PutImage", repository(environment)), "allowed");
@@ -103,67 +84,24 @@ for (const environment of ["preprod", "prod"]) {
   });
 }
 
-describe("GitHub Terraform 역할", () => {
-  test("plan은 bootstrap 정책 변경 없이 새 서비스 조회를 허용하고 리소스 생성을 거부한다", async () => {
-    assert.equal(await decide(planRole, "elasticloadbalancing:DescribeLoadBalancers", "*"), "allowed");
-    assert.equal(await decide(planRole, "acm:DescribeCertificate", `arn:aws:acm:${region}:${account}:certificate/*`), "allowed");
-    assert.equal(await decide(planRole, "ec2:CreateVpc", `arn:aws:ec2:${region}:${account}:vpc/*`), "implicitDeny");
-  });
-
-  test("apply는 bootstrap 정책 변경 없이 새 서비스 리소스와 서비스 연결 역할 생성을 허용한다", async () => {
-    assert.equal(await decide(applyRole, "ec2:CreateVpc", `arn:aws:ec2:${region}:${account}:vpc/*`), "allowed");
-    assert.equal(await decide(applyRole, "elasticloadbalancing:CreateLoadBalancer", "*"), "allowed");
-    assert.equal(await decide(applyRole, "acm:RequestCertificate", "*"), "allowed");
-    assert.equal(
-      await decide(applyRole, "iam:CreateServiceLinkedRole", `arn:aws:iam::${account}:role/aws-service-role/clientvpn.amazonaws.com/*`),
-      "allowed",
-    );
-  });
-
-  test("apply는 공통 ECS 역할을 정해진 서비스에만 전달하고 다른 역할 전달을 거부한다", async () => {
-    assert.equal(await decide(applyRole, "iam:PassRole", role("ecs-host"), { "iam:PassedToService": "ec2.amazonaws.com" }), "allowed");
-    assert.equal(await decide(applyRole, "iam:PassRole", role("ecs-host"), { "iam:PassedToService": "ecs-tasks.amazonaws.com" }), "implicitDeny");
-    assert.equal(
-      await decide(applyRole, "iam:PassRole", role("ecs-task-execution"), { "iam:PassedToService": "ecs-tasks.amazonaws.com" }),
-      "allowed",
-    );
-    assert.equal(await decide(applyRole, "iam:PassRole", role("bootstrap-operator"), { "iam:PassedToService": "ec2.amazonaws.com" }), "implicitDeny");
-  });
-
-  test("apply는 IAM 역할 생성과 정책 연결을 거부한다", async () => {
-    assert.equal(await decide(applyRole, "iam:CreateRole", role("extra")), "implicitDeny");
-    assert.equal(await decide(applyRole, "iam:AttachRolePolicy", role("ecs-host")), "implicitDeny");
-    assert.equal(await decide(applyRole, "iam:PutRolePolicy", role("apply")), "implicitDeny");
-  });
-
-  test("apply는 state 버킷 설정 변경과 감사 trail 중지·로그 삭제를 거부한다", async () => {
-    assert.equal(await decide(applyRole, "s3:PutBucketVersioning", bucket), "explicitDeny");
-    assert.equal(await decide(applyRole, "s3:DeleteBucket", bucket), "explicitDeny");
-    assert.equal(await decide(applyRole, "cloudtrail:StopLogging", auditTrail), "explicitDeny");
-    assert.equal(await decide(applyRole, "s3:DeleteObject", `${auditBucket}/AWSLogs/${account}/log.json.gz`), "explicitDeny");
-  });
-
-  test("apply 신뢰 정책은 main 전용 *-apply 환경 토큰만 허용하고 plan은 *-plan 환경 토큰만 허용한다", () => {
-    const subject = plan.variables.github_repository_subject.value;
-    assert.deepEqual(trustedSubjects("apply").sort(), [`${subject}:environment:preprod-apply`, `${subject}:environment:prod-apply`]);
-    assert.deepEqual(trustedSubjects("plan").sort(), [`${subject}:environment:preprod-plan`, `${subject}:environment:prod-plan`]);
-  });
-
-  test("앱 역할 신뢰 정책은 앱 저장소의 preprod 브랜치와 prod-deploy 환경만 허용한다", () => {
+describe("GitHub 역할", () => {
+  test("GitHub OIDC 역할은 앱 저장소의 preprod 브랜치와 prod-deploy 환경만 신뢰한다", () => {
     const subject = plan.variables.app_repository_subject.value;
+    const keys = plan.resource_changes
+      .filter(({ address, change }) => address.startsWith("module.iam.aws_iam_role.github[") && change.after)
+      .map(({ index }) => index);
+    assert.deepEqual(keys.sort(), ["app-preprod", "app-prod"]);
     assert.deepEqual(trustedSubjects("app-preprod"), [`${subject}:ref:refs/heads/preprod`]);
     assert.deepEqual(trustedSubjects("app-prod"), [`${subject}:environment:prod-deploy`]);
   });
-});
 
-describe("공통 IAM 경계", () => {
   test("prod 앱 역할은 ALB 대상 조회를 허용하고 preprod 앱 역할은 거부한다", async () => {
     assert.equal(await decide(appRoles.prod, "elasticloadbalancing:DescribeTargetHealth", "*"), "allowed");
     assert.equal(await decide(appRoles.preprod, "elasticloadbalancing:DescribeTargetHealth", "*"), "implicitDeny");
   });
 
-  test("GitHub 역할은 bootstrap state 읽기를 거부한다", async () => {
-    for (const documents of [planRole, applyRole, ...Object.values(appRoles)]) {
+  test("앱 역할은 bootstrap state 읽기를 거부한다", async () => {
+    for (const documents of Object.values(appRoles)) {
       assert.notEqual(await decide(documents, "s3:GetObject", `${bucket}/bootstrap/terraform.tfstate`), "allowed");
     }
   });
@@ -174,7 +112,9 @@ describe("공통 IAM 경계", () => {
       assert.equal(await decide(documents, "iam:CreateRole", role("extra")), "implicitDeny");
     }
   });
+});
 
+describe("공통 IAM 경계", () => {
   test("ECS 호스트 역할에는 SSM 관리 정책이 연결된다", () => {
     const attachment = after["module.iam.aws_iam_role_policy_attachment.ecs_host_ssm"];
     assert.equal(attachment.role, "aws-fullstack-lab-ecs-host");

@@ -1,15 +1,14 @@
 #!/usr/bin/env bash
 # AWS Client VPN의 로컬 CA·기기 인증서를 만들고, 서버 인증서만 ACM에 등록한다.
 # 개인 키와 클라이언트 .ovpn은 이 Mac의 사용자 설정 디렉터리에만 둔다.
-# prepare는 GitHub plan/apply가 사용할 ACM ARN을 repository secret으로 설정한다.
+# prepare가 저장한 ACM ARN은 scripts/infra.sh preprod가 읽는다.
 # suspend는 preprod 태스크·호스트를 0대로 줄이고 VPN 대상 서브넷 연결을 해제한다.
-# 다시 쓸 때는 preprod 적용 workflow가 선언값대로 모두 되돌린다.
+# 다시 쓸 때는 scripts/infra.sh preprod가 선언값대로 모두 되돌린다.
 set -euo pipefail
 umask 077
 
 command="${1:-}"
 region="${AWS_REGION:-ap-northeast-2}"
-repo="${GITHUB_REPOSITORY:-ban-dal/aws-ecs-fullstack-app}"
 name="aws-fullstack-lab-preprod-client-vpn"
 dir="${HOME}/.config/aws-fullstack-lab/preprod/client-vpn"
 arn_file="$dir/server-certificate-arn"
@@ -28,7 +27,6 @@ caller="$(aws sts get-caller-identity --region "$region" --query Arn --output te
 
 if [[ "$command" == prepare ]]; then
   command -v openssl >/dev/null || { echo "openssl 명령이 필요합니다." >&2; exit 1; }
-  command -v gh >/dev/null || { echo "GitHub CLI gh 명령이 필요합니다." >&2; exit 1; }
   mkdir -p "$dir"
   if [[ ! -f "$dir/ca.key" ]]; then
     openssl genrsa -out "$dir/ca.key" 2048 >/dev/null 2>&1
@@ -68,8 +66,7 @@ if [[ "$command" == prepare ]]; then
     aws acm add-tags-to-certificate --region "$region" --certificate-arn "$(cat "$arn_file")" \
       --tags Key=Project,Value=aws-fullstack-lab Key=Environment,Value=preprod Key=ManagedBy,Value=script
   fi
-  gh secret set CLIENT_VPN_SERVER_CERTIFICATE_ARN --repo "$repo" < "$arn_file"
-  echo "서버 인증서를 ACM에 등록하고 GitHub secret을 설정했습니다."
+  echo "서버 인증서를 ACM에 등록하고 ARN을 $arn_file 에 저장했습니다."
   echo "CA와 클라이언트 개인 키는 $dir 에만 보관합니다."
   exit 0
 fi
@@ -78,7 +75,7 @@ endpoint_id="$(aws ec2 describe-client-vpn-endpoints --region "$region" \
   --filters "Name=tag:Name,Values=$name" \
   --query 'ClientVpnEndpoints[0].ClientVpnEndpointId' --output text)"
 [[ -n "$endpoint_id" && "$endpoint_id" != None ]] || {
-  echo "preprod Client VPN 엔드포인트가 없습니다. 적용 workflow를 확인하세요." >&2
+  echo "preprod Client VPN 엔드포인트가 없습니다. scripts/infra.sh preprod plan으로 확인하세요." >&2
   exit 1
 }
 
@@ -119,7 +116,7 @@ if [[ "$command" == suspend ]]; then
       --client-vpn-endpoint-id "$endpoint_id" --association-id "$association_id" >/dev/null
     echo "대상 서브넷 연결 해제를 시작했습니다. 완료되면 VPN 접속과 엔드포인트 연결 시간 과금이 멈춥니다."
   fi
-  echo "다시 쓸 때는 preprod 적용 workflow의 새 plan에서 서브넷 연결·호스트·태스크 복구를 확인하고 적용하세요."
+  echo "다시 쓸 때는 scripts/infra.sh preprod plan에서 서브넷 연결·호스트·태스크 복구를 확인하고 적용하세요."
   exit 0
 fi
 

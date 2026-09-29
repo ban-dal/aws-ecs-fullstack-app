@@ -1,15 +1,13 @@
 #!/usr/bin/env bash
-# `terraform show -json`으로 만든 plan JSON을 요약·검사한다. bootstrap 스크립트와
-# GitHub workflow가 같은 기준을 쓰도록 한곳에 둔다.
+# `terraform show -json`으로 만든 plan JSON을 요약·검사한다. scripts/infra.sh가 쓴다.
 #
 #   scripts/tfplan.sh summary <plan.json>            # 생성·수정·삭제·교체·state 제외 개수와 대상 목록
-#   scripts/tfplan.sh check-foundation <plan.json>   # 적용 workflow가 허용하는 변경인지 검사
-#   scripts/tfplan.sh fingerprint <plan.json>        # 변경 내용의 해시
+#   scripts/tfplan.sh check-foundation <plan.json>   # 환경 루트 적용이 허용하는 변경인지 검사
 set -euo pipefail
 
 command="${1:-}"
 plan_json="${2:-}"
-[[ -f "$plan_json" ]] || { echo "usage: scripts/tfplan.sh summary|check-foundation|fingerprint <plan.json>" >&2; exit 2; }
+[[ -f "$plan_json" ]] || { echo "usage: scripts/tfplan.sh summary|check-foundation <plan.json>" >&2; exit 2; }
 
 case "$command" in
   summary)
@@ -49,24 +47,15 @@ case "$command" in
       | "- \(.change.actions | join("/")) \(.address)"
     ' "$plan_json")"
     if [[ -n "$violations" ]]; then
-      echo "적용 workflow가 허용하지 않는 변경:"
+      echo "환경 루트 적용이 허용하지 않는 변경:"
       echo "$violations"
       exit 1
     fi
-    echo "적용 workflow 검사 통과: 모듈 안의 생성·수정 또는 prod 웹 태스크 정의의 선생성 교체만 있다."
-    ;;
-
-  fingerprint)
-    # 승인한 plan과 적용할 plan이 같은지 비교하는 값이다. 실행 시각처럼 매번 달라지는
-    # 필드는 빼고, 리소스와 output의 변경 내용만 키 순서를 정렬해 해시한다.
-    jq -S -c '{
-      resource_changes: [.resource_changes[]? | {address, previous_address, change: (.change | {actions, before, after, after_unknown, importing})}],
-      output_changes: (.output_changes // {})
-    }' "$plan_json" | shasum -a 256 | cut -d' ' -f1
+    echo "환경 루트 적용 검사 통과: 모듈 안의 생성·수정 또는 prod 웹 태스크 정의의 선생성 교체만 있다."
     ;;
 
   *)
-    echo "usage: scripts/tfplan.sh summary|check-foundation|fingerprint <plan.json>" >&2
+    echo "usage: scripts/tfplan.sh summary|check-foundation <plan.json>" >&2
     exit 2
     ;;
 esac
