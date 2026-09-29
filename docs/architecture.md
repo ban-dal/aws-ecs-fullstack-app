@@ -11,7 +11,7 @@ flowchart LR
   VPN --> EC2
   ECS --> EC2[공개 서브넷 EC2]
   EC2 --> ECR[ECR 이미지]
-  InfraCI[인프라 repo Actions OIDC] --> TF[Terraform]
+  Operator --> TF[로컬 Terraform / MFA 운영 역할]
   AppCI[앱 repo Actions OIDC] --> ECR
   AppCI --> ECS
   TF --> State[S3 원격 state]
@@ -42,10 +42,9 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-  InfraPR[인프라 repo PR] --> Plan[fmt·validate·환경 plan]
-  Plan --> InfraMain[인프라 main]
-  InfraMain --> Foundation[수동 기반 apply]
-  InfraMain --> Bootstrap[bootstrap은 로컬 apply]
+  InfraPR[인프라 repo PR] --> Check[CI fmt·validate + 로컬 plan 요약]
+  Check --> InfraMain[인프라 main]
+  InfraMain --> LocalApply[루트별 로컬 apply]
   AppPR[앱 repo PR] --> AppCheck[타입·빌드·health]
   AppCheck --> Preprod[앱 preprod push]
   Preprod --> PreprodDeploy[preprod 이미지 빌드·ECS 자동 배포]
@@ -63,12 +62,12 @@ prod 홈 화면과 `/api/backend`는 요청의 Host, `X-Forwarded-Proto`, `X-Amz
 
 ## 보안과 한계
 
-권한 정책이 무엇을 허용하고 거부해야 하는지는 [`infra/bootstrap/tests/`](../infra/bootstrap/tests/iam.test.mjs)의 테스트가 기준이다. bootstrap을 적용할 때마다 `scripts/bootstrap.sh plan`이 이 테스트를 실행한다.
+권한 정책이 무엇을 허용하고 거부해야 하는지는 [`infra/bootstrap/tests/`](../infra/bootstrap/tests/iam.test.mjs)의 테스트가 기준이다. bootstrap을 plan할 때마다 `scripts/infra.sh bootstrap plan`이 이 테스트를 실행한다.
 
 - **state 버킷** ([`s3-terraform-state`](../infra/modules/s3-terraform-state/main.tf)): 공개 접근 차단, HTTPS 강제, 암호화, 버전 관리.
-- **GitHub OIDC 역할** ([`iam`](../infra/modules/iam/main.tf)): 각 저장소의 immutable subject를 사용한다. 인프라 plan은 `ReadOnlyAccess`, apply는 `PowerUserAccess`와 공통 ECS 역할로 제한한 `iam:PassRole`을 가진다. 앱 저장소의 preprod·prod 역할은 각 ECR 저장소·ECS 서비스에만 쓴다. prod 역할은 앱 저장소의 main 전용 `prod-deploy` 환경만 신뢰한다. plan 역할은 승인 없이 PR 브랜치 코드도 받으므로 쓰기 역할과 합치지 않는다.
-- **환경 경계**: 두 환경의 Terraform 루트와 state key는 분리하지만 IAM 역할은 공유한다. apply 역할은 IAM과 bootstrap의 state 버킷·감사 trail을 뺀 계정의 모든 리소스를 변경할 수 있다. main 전용 `*-apply` 환경, prod 승인과 저장 plan 비교로 적용 작업을 통제하며, 이 방식은 환경 간 IAM 격리나 IAM 비용 상한을 제공하지 않는다.
-- **ECS 역할** ([`iam`](../infra/modules/iam/main.tf)): 두 환경이 호스트 역할과 태스크 실행 역할을 공유한다. apply는 이 두 역할만 정해진 서비스에 넘길 수 있고, 태스크 실행 역할은 두 환경 저장소 pull과 로그 쓰기만 할 수 있다.
-- **사람의 운영 역할** ([`iam`](../infra/modules/iam/main.tf)): MFA 세션만 신뢰하는 계정 관리자 역할이다. bootstrap 운영에 쓰고 일상 배포는 GitHub 역할을 쓴다.
-- **GitHub 환경 승인** ([`scripts/check-github-settings.sh`](../scripts/check-github-settings.sh)): `prod-apply`에만 필수 승인을 두고, 1인 저장소라 자기 승인을 허용한다. 두 `*-apply` 환경은 `main`에서만 배포한다.
-- **적용 workflow** ([`apply-foundation.yml`](../.github/workflows/apply-foundation.yml), [`scripts/tfplan.sh`](../scripts/tfplan.sh)): 승인한 plan과 같은 변경만 적용한다. prod 웹 태스크 정의의 컨테이너 변경은 새 revision을 먼저 만드는 교체로 허용하며, 다른 삭제·교체는 막는다. destroy 경로는 아직 없다.
+- **GitHub OIDC 역할** ([`iam`](../infra/modules/iam/main.tf)): 앱 저장소의 immutable subject만 신뢰한다. preprod·prod 역할은 각 ECR 저장소·ECS 서비스에만 쓰고, prod 역할은 앱 저장소의 main 전용 `prod-deploy` 환경만 신뢰한다. 인프라 저장소에는 AWS 역할이 없다. IAM을 포함한 루트를 GitHub가 적용하려면 계정 관리자에 준하는 역할을 GitHub에 줘야 하므로, 모든 루트를 사람이 적용한다.
+- **적용 경로** ([`scripts/infra.sh`](../scripts/infra.sh), [`scripts/tfplan.sh`](../scripts/tfplan.sh)): bootstrap·preprod·prod를 같은 스크립트로 MFA 운영 역할 세션에서 적용한다. `main`이 `origin/main`과 같고 저장 plan을 만든 commit과 같을 때만 적용한다. 환경 루트는 모듈 안의 생성·수정과 prod 웹 태스크 정의의 컨테이너 변경에 따른 선생성 교체만 허용하고, 다른 삭제·교체는 막는다. destroy 경로는 아직 없다.
+- **환경 경계**: 두 환경의 Terraform 루트와 state key는 분리하지만 운영 역할은 계정 관리자다. 환경 간 IAM 격리나 IAM 비용 상한은 없고, 루트 선택과 plan 요약 확인이 경계다.
+- **ECS 역할** ([`iam`](../infra/modules/iam/main.tf)): 두 환경이 호스트 역할과 태스크 실행 역할을 공유한다. 앱 배포 역할은 태스크 실행 역할만 ECS 태스크에 넘길 수 있고, 태스크 실행 역할은 두 환경 저장소 pull과 로그 쓰기만 할 수 있다.
+- **사람의 운영 역할** ([`iam`](../infra/modules/iam/main.tf)): MFA 세션만 신뢰하는 계정 관리자 역할이다. 모든 인프라 루트 적용에 쓰고, 앱 배포는 앱 저장소의 GitHub 역할이 한다.
+- **GitHub 설정** ([`scripts/check-github-settings.sh`](../scripts/check-github-settings.sh)): 앱 저장소의 `prod-deploy` 환경은 `main`에서만 배포한다. 인프라 저장소에는 AWS 값을 담은 secret·변수와 배포 환경을 두지 않는다.

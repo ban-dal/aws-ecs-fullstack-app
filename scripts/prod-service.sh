@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # prod 공개 서비스 확인과 비용 중지. suspend는 태스크·호스트를 0대로 줄이고 ALB를
-# 삭제한다. 다음 prod 적용 workflow가 Terraform 차이를 확인하고 복구한다.
+# 삭제한다. 다음 `scripts/infra.sh prod plan`이 Terraform 차이를 보여 주고 apply가 복구한다.
 set -euo pipefail
 
 command="${1:-}"

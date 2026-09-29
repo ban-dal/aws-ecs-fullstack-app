@@ -24,8 +24,7 @@
 
 | 대상 | 방법 |
 | --- | --- |
-| 서비스 리소스 | merge 후 `main`에서 `Apply service foundation` workflow |
-| `infra/bootstrap` | merge 후 로컬에서 `scripts/bootstrap.sh` |
+| `infra/bootstrap`, `infra/environments/<환경>` | merge 후 `main`에서 로컬 `scripts/infra.sh <루트> plan`·`apply`. IAM이 함께 바뀌면 bootstrap 먼저 |
 
 - plan 범위가 PR 본문과 다르거나 정책 테스트가 실패하면 적용하지 않고 묻는다.
 - merge 후 운영 작업과 로컬 긴급 변경의 결과는 PR 댓글에 남기고, 긴급 변경은 코드에 반영한다.
@@ -34,8 +33,8 @@
 
 | 변경 | 실행 |
 | --- | --- |
-| Terraform | `terraform fmt -check`, 수정한 루트의 `terraform validate` |
-| `infra/bootstrap` | `scripts/bootstrap.sh plan`의 요약과 정책 테스트 결과를 PR에 쓴다. 정책 의도가 바뀌면 같은 PR에서 `infra/bootstrap/tests/`를 고친다 |
+| Terraform | `terraform fmt -check`, 수정한 루트의 `terraform validate`, 바뀐 루트마다 `scripts/infra.sh <루트> plan`의 요약을 PR에 쓴다 |
+| `infra/bootstrap` | `scripts/infra.sh bootstrap plan`의 정책 테스트 결과를 PR에 쓴다. 정책 의도가 바뀌면 같은 PR에서 `infra/bootstrap/tests/`를 고친다 |
 | GitHub 환경·변수 | `scripts/check-github-settings.sh`. 기대값이 바뀌면 같은 PR에서 스크립트를 고친다 |
 
 ## 사실의 원천
@@ -49,5 +48,5 @@
 | IAM 정책 의도 | `infra/bootstrap/tests/` |
 | 운영 절차 | `scripts/`. `docs/operations.md`에는 스크립트로 만들 수 없는 순서와 사용법만 둔다 |
 | GitHub 환경 설정 | `scripts/check-github-settings.sh`의 기대값 |
-| 적용 상태 | bootstrap은 `main`, 서비스는 GitHub Deployments |
+| 적용 상태 | `main`과 PR 적용 댓글. `scripts/infra.sh <루트> plan`이 변경 없음이면 적용 완료 |
 | 변경 이력과 실행 결과 | PR 본문과 댓글 |

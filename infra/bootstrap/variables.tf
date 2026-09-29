@@ -18,17 +18,6 @@ variable "state_bucket_name" {
   description = "전역에서 유일한 Terraform state S3 버킷 이름"
 }
 
-variable "github_repository_subject" {
-  type        = string
-  description = "GitHub OIDC sub의 repo 접두사. 소유자·저장소의 immutable ID를 포함해 이름이 바뀌어도 신뢰가 넘어가지 않는다."
-  default     = "repo:ban-dal@46153202/aws-ecs-fullstack-app@1382568125"
-
-  validation {
-    condition     = startswith(var.github_repository_subject, "repo:")
-    error_message = "github_repository_subject는 repo:로 시작해야 합니다."
-  }
-}
-
 variable "app_repository_subject" {
   type        = string
   description = "앱 저장소 GitHub OIDC sub 접두사. immutable owner/repository ID를 사용한다."
