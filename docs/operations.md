@@ -182,13 +182,14 @@ PR에서는 두 환경의 plan 요약과 바뀐 인프라 파일이 PR 댓글 �
 
 ## 6. 비용 관리
 
-- 새 AWS Free plan은 최대 6개월 또는 크레딧 소진 시 끝난다(2026년 9월 기준). Billing의 Free Tier 85% 알림과 크레딧 잔여량을 확인한다.
+- 새 AWS Free plan은 최대 6개월 또는 크레딧 소진 시 끝난다(2026년 9월 기준). 크레딧은 사용액을 차감하므로 Cost Explorer에서는 `RECORD_TYPE`이 `Usage`인 항목만 걸러 실제 사용액을 본다. 크레딧 잔여량은 Billing이나 `aws freetier get-account-plan-state --region us-east-1`로 확인하고, Billing의 Free Tier 85% 알림도 확인한다.
 - Budget([`modules/budgets`](../infra/modules/budgets/main.tf))은 이메일로 알리기만 하고 지출을 멈추지 않는다.
 - IAM, VPC, Internet Gateway 자체는 무료다. S3 state 저장·요청과 ECR 이미지 저장·전송은 사용량에 따라 과금된다. state 버킷의 이전 버전은 lifecycle 규칙으로 만료된다.
 - Route 53 호스팅 영역은 월 $0.50이다. 퍼블릭 IPv4, EC2, ALB도 과금 대상이다. 추가하는 PR에서 서울 리전 요금으로 비용을 계산하고, 공개 앱은 기본적으로 끈다. NAT Gateway는 쓰지 않는다.
-- preprod 호스트는 `t4g.small` 1대, 30 GiB gp3 EBS, 공개 IPv4 1개와 CloudWatch 로그를 쓴다. 24시간 가동 시 EC2 정가 약 $15/월, IPv4 약 $3.65/월, EBS 약 $3~4/월에 로그·전송량이 더해진다. AWS의 `t4g.small` 월 750시간 체험이 2026년 말까지 해당 계정에 적용되면 EC2 사용액은 줄지만, 실제 Free plan 크레딧·체험 잔량은 Billing에서 확인한다.
-- preprod를 쉬게 할 때 `scripts/preprod-client-vpn.sh suspend`는 VPN 연결 시간 과금을 멈추고 EBS와 공개 IP도 호스트 종료와 함께 해제한다. 로그·ECR 저장 비용은 남는다.
-- prod를 24시간 켜면 서울 리전 ALB 기본요금 $0.0225/시간(30일 약 $16.20), `t4g.small` 두 대 약 $30/월, 호스트와 ALB의 공개 IPv4 네 개 약 $14.40/월, 30 GiB gp3 EBS 두 개 약 $6~8/월을 예상한다. 합계 약 $67~69/월에 ALB LCU·로그·전송량·세금이 더해진다. ALB LCU는 $0.008/LCU-시간이다. 계정의 T4g 체험·Free plan 크레딧이 적용되면 실제 청구액은 줄 수 있다. [AWS ALB 요금](https://aws.amazon.com/elasticloadbalancing/pricing/), [AWS 공개 IPv4 요금](https://aws.amazon.com/vpc/pricing/) 및 Billing에서 확인한다.
+- preprod는 `t4g.small` 호스트 1대, 30 GiB gp3 EBS, 호스트 공개 IPv4 1개, Client VPN과 CloudWatch 로그를 쓴다. preprod 비용의 대부분은 Client VPN이다. 서울 리전에서 대상 서브넷 연결 하나에 접속자가 없어도 $0.10/시간(30일 약 $72)이 붙고, 연결이 만든 네트워크 인터페이스 두 개의 공개 IPv4가 약 $7.20/월을 더한다. 접속 시간은 $0.05/시간이다. 24시간 켜 두면 여기에 EC2 정가 약 $15/월, 호스트 IPv4 약 $3.60/월, EBS 약 $2.70/월이 더해져 합계 약 $100/월에 로그·전송량이 더해진다.
+- AWS의 `t4g.small` 월 750시간 체험(2026년 말까지)은 계정의 모든 호스트에 합산해 적용된다. preprod 1대와 prod 2대를 24시간 켜면 30일에 2,160시간이므로 750시간을 넘는 사용분은 정가로 과금된다.
+- preprod를 쉬게 할 때 `scripts/preprod-client-vpn.sh suspend`는 VPN 서브넷 연결과 그 공개 IPv4의 과금을 멈추고 EBS와 호스트 공개 IP도 호스트 종료와 함께 해제한다. 로그·ECR 저장 비용은 남는다.
+- prod를 24시간 켜면 서울 리전 ALB 기본요금 $0.0225/시간(30일 약 $16.20), `t4g.small` 두 대 약 $30/월, 호스트와 ALB의 공개 IPv4 네 개 약 $14.40/월, 30 GiB gp3 EBS 두 개 약 $5.50/월을 예상한다. 합계 약 $66/월에 ALB LCU·로그·전송량·세금이 더해진다. ALB LCU는 $0.008/LCU-시간이다. 계정의 T4g 체험·Free plan 크레딧이 적용되면 실제 청구액은 줄 수 있다. [AWS ALB 요금](https://aws.amazon.com/elasticloadbalancing/pricing/), [AWS 공개 IPv4 요금](https://aws.amazon.com/vpc/pricing/) 및 Billing에서 확인한다.
 - `scripts/prod-service.sh suspend`는 ALB와 호스트의 시간당 과금을 멈춘다. 상태에 남은 리소스와 DNS alias는 다음 prod 적용 workflow가 복구한다.
 
 ## 7. 종료·롤백·복구
