@@ -157,6 +157,11 @@ describe("GitHub Terraform 역할", () => {
 });
 
 describe("공통 IAM 경계", () => {
+  test("prod 앱 역할은 ALB 대상 조회를 허용하고 preprod 앱 역할은 거부한다", async () => {
+    assert.equal(await decide(appRoles.prod, "elasticloadbalancing:DescribeTargetHealth", "*"), "allowed");
+    assert.equal(await decide(appRoles.preprod, "elasticloadbalancing:DescribeTargetHealth", "*"), "implicitDeny");
+  });
+
   test("GitHub 역할은 bootstrap state 읽기를 거부한다", async () => {
     for (const documents of [planRole, applyRole, ...Object.values(appRoles)]) {
       assert.notEqual(await decide(documents, "s3:GetObject", `${bucket}/bootstrap/terraform.tfstate`), "allowed");

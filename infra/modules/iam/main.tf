@@ -151,6 +151,14 @@ data "aws_iam_policy_document" "app" {
     actions   = ["ecs:DescribeTaskDefinition"]
     resources = ["*"]
   }
+  dynamic "statement" {
+    for_each = each.key == "prod" ? [1] : []
+    content {
+      # DescribeTargetHealth는 리소스 ARN 범위 지정을 지원하지 않는다.
+      actions   = ["elasticloadbalancing:DescribeTargetHealth"]
+      resources = ["*"]
+    }
+  }
   statement {
     actions   = ["ecs:RegisterTaskDefinition", "ecs:TagResource"]
     resources = ["arn:aws:ecs:${var.region}:${var.account_id}:task-definition/aws-fullstack-lab-${each.key}-web:*"]
