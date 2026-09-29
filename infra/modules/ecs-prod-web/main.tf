@@ -75,6 +75,11 @@ resource "aws_ecs_service" "web" {
     field = "attribute:ecs.availability-zone"
   }
 
+  # AZ spread는 최선 노력 방식이므로 두 태스크의 호스트 분리는 제약으로 강제한다.
+  placement_constraints {
+    type = "distinctInstance"
+  }
+
   load_balancer {
     target_group_arn = var.target_group_arn
     container_name   = "web"

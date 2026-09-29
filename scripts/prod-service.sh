@@ -27,16 +27,19 @@ if [[ "$command" == check ]]; then
 
   arn="$(aws elbv2 describe-target-groups --region "$region" --names "$target_group" \
     --query 'TargetGroups[0].TargetGroupArn' --output text)"
-  healthy="$(aws elbv2 describe-target-health --region "$region" --target-group-arn "$arn" \
-    --query 'length(TargetHealthDescriptions[?TargetHealth.State==`healthy`])' --output text)"
-  [[ "$healthy" == 2 ]] || {
-    echo "prod ALB의 정상 대상이 2개가 아니다: $healthy" >&2
+  targets="$(aws elbv2 describe-target-health --region "$region" --target-group-arn "$arn" --output json)"
+  if ! jq -e '
+    [.TargetHealthDescriptions[] | select(.TargetHealth.State == "healthy") | .Target.Id] as $ids
+    | ($ids | length) == 2 and ($ids | unique | length) == 2
+  ' <<<"$targets" >/dev/null; then
+    echo "prod ALB 정상 대상이 서로 다른 EC2 두 대에 있지 않다:" >&2
+    jq -r '.TargetHealthDescriptions[] | "  \(.Target.Id):\(.Target.Port) \(.TargetHealth.State)"' <<<"$targets" >&2
     exit 1
-  }
+  fi
 
   curl -fsS --max-time 10 https://aws.bandal.dev/api/health \
     | jq -e '.status == "ok" and .environment == "prod"' >/dev/null
-  echo "prod 정상: ECS 2/2, ALB 대상 2/2, HTTPS health 응답 확인"
+  echo "prod 정상: ECS 2/2, 서로 다른 EC2의 ALB 대상 2/2, HTTPS health 응답 확인"
   exit 0
 fi
 
