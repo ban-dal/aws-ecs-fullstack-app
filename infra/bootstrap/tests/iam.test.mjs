@@ -78,6 +78,15 @@ for (const environment of ["preprod", "prod"]) {
       assert.equal(await decide(appRoles[environment], "iam:PassRole", role("bootstrap-operator"), { "iam:PassedToService": "ecs-tasks.amazonaws.com" }), "implicitDeny");
     });
 
+    test(`${environment} 앱 역할은 해당 서비스의 배포 이력 조회를 허용하고 다른 환경 조회를 거부한다`, async () => {
+      const other = environment === "preprod" ? "prod" : "preprod";
+      const history = (env) => `arn:aws:ecs:${region}:${account}:service-deployment/aws-fullstack-lab-${env}-cluster/web/example`;
+      const revision = (env) => `arn:aws:ecs:${region}:${account}:service-revision/aws-fullstack-lab-${env}-cluster/web/1`;
+      assert.equal(await decide(appRoles[environment], "ecs:DescribeServiceDeployments", history(environment)), "allowed");
+      assert.equal(await decide(appRoles[environment], "ecs:DescribeServiceRevisions", revision(environment)), "allowed");
+      assert.equal(await decide(appRoles[environment], "ecs:DescribeServiceDeployments", history(other)), "implicitDeny");
+    });
+
     test(`${environment} 실행 역할은 이미지 pull을 허용한다`, async () => {
       assert.equal(await decide(executionRole, "ecr:BatchGetImage", repository(environment)), "allowed");
     });
@@ -98,15 +107,6 @@ describe("GitHub 역할", () => {
   test("prod 앱 역할은 ALB 대상 조회를 허용하고 preprod 앱 역할은 거부한다", async () => {
     assert.equal(await decide(appRoles.prod, "elasticloadbalancing:DescribeTargetHealth", "*"), "allowed");
     assert.equal(await decide(appRoles.preprod, "elasticloadbalancing:DescribeTargetHealth", "*"), "implicitDeny");
-  });
-
-  test("prod 앱 역할은 prod 서비스의 배포 이력 조회를 허용하고 preprod 서비스 조회를 거부한다", async () => {
-    const history = (env) => `arn:aws:ecs:${region}:${account}:service-deployment/aws-fullstack-lab-${env}-cluster/web/example`;
-    const revision = (env) => `arn:aws:ecs:${region}:${account}:service-revision/aws-fullstack-lab-${env}-cluster/web/1`;
-    assert.equal(await decide(appRoles.prod, "ecs:DescribeServiceDeployments", history("prod")), "allowed");
-    assert.equal(await decide(appRoles.prod, "ecs:DescribeServiceRevisions", revision("prod")), "allowed");
-    assert.equal(await decide(appRoles.prod, "ecs:DescribeServiceDeployments", history("preprod")), "implicitDeny");
-    assert.equal(await decide(appRoles.preprod, "ecs:DescribeServiceDeployments", history("preprod")), "implicitDeny");
   });
 
   test("앱 역할은 bootstrap state 읽기를 거부한다", async () => {
