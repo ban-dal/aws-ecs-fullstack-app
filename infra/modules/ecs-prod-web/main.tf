@@ -76,6 +76,8 @@ resource "aws_cloudwatch_metric_alarm" "target_5xx" {
   tags = var.tags
 }
 
+# 호스트 두 대에 distinctInstance로 태스크를 하나씩 두므로 남는 자리가 없다. 최대 200%면
+# 새 태스크 배치가 계속 실패해 circuit breaker가 롤백하므로 100%로 한 대씩 내리고 띄운다.
 resource "aws_ecs_service" "web" {
   name                               = "web"
   cluster                            = var.cluster_id
@@ -83,7 +85,7 @@ resource "aws_ecs_service" "web" {
   desired_count                      = 2
   launch_type                        = "EC2"
   deployment_minimum_healthy_percent = 50
-  deployment_maximum_percent         = 200
+  deployment_maximum_percent         = 100
   wait_for_steady_state              = true
   health_check_grace_period_seconds  = 120
 
