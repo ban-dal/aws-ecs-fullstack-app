@@ -93,9 +93,11 @@ module "web" {
   region         = var.aws_region
   repository_url = module.ecr_repository.repository_url
   # Terraform 신규 생성 시 사용하는 seed 이미지. 이후 서비스 revision은 앱 저장소 CI가 관리한다.
-  image_tag        = "f98af60d54ad85c79c41bfb2835a25b66d0c833a"
-  target_group_arn = module.alb.target_group_arn
-  tags             = local.tags
+  image_tag               = "f98af60d54ad85c79c41bfb2835a25b66d0c833a"
+  target_group_arn        = module.alb.target_group_arn
+  alb_arn_suffix          = module.alb.arn_suffix
+  target_group_arn_suffix = module.alb.target_group_arn_suffix
+  tags                    = local.tags
 
   depends_on = [module.ecs_host, module.alb]
 }

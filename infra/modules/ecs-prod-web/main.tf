@@ -1,5 +1,5 @@
 # prod는 두 AZ의 ECS 호스트에 태스크 두 개를 분산한다. bridge 동적 포트를
-# ALB 대상 그룹에 등록하고 헬스 체크 실패 시 배포를 되돌린다.
+# ALB 대상 그룹에 등록하고 헬스 체크 실패나 앱 5xx 증가 시 배포를 되돌린다.
 resource "aws_cloudwatch_log_group" "web" {
   name              = "${var.name_prefix}-web"
   retention_in_days = 7
@@ -54,6 +54,28 @@ resource "aws_ecs_task_definition" "web" {
   }
 }
 
+# health는 정상인데 다른 경로가 5xx를 내는 배포를 잡는다. ECS는 배포 중과 배포 직후
+# 이 alarm이 ALARM이 되면 이전 revision으로 되돌린다. 요청이 없으면 울리지 않는다.
+resource "aws_cloudwatch_metric_alarm" "target_5xx" {
+  alarm_name          = "${var.name_prefix}-web-target-5xx"
+  alarm_description   = "prod 앱 5xx 증가. ECS 배포 alarm 롤백에 쓴다."
+  namespace           = "AWS/ApplicationELB"
+  metric_name         = "HTTPCode_Target_5XX_Count"
+  statistic           = "Sum"
+  period              = 60
+  evaluation_periods  = 1
+  threshold           = 5
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    LoadBalancer = var.alb_arn_suffix
+    TargetGroup  = var.target_group_arn_suffix
+  }
+
+  tags = var.tags
+}
+
 resource "aws_ecs_service" "web" {
   name                               = "web"
   cluster                            = var.cluster_id
@@ -68,6 +90,12 @@ resource "aws_ecs_service" "web" {
   deployment_circuit_breaker {
     enable   = true
     rollback = true
+  }
+
+  alarms {
+    alarm_names = [aws_cloudwatch_metric_alarm.target_5xx.alarm_name]
+    enable      = true
+    rollback    = true
   }
 
   ordered_placement_strategy {

@@ -100,6 +100,15 @@ describe("GitHub 역할", () => {
     assert.equal(await decide(appRoles.preprod, "elasticloadbalancing:DescribeTargetHealth", "*"), "implicitDeny");
   });
 
+  test("prod 앱 역할은 prod 서비스의 배포 이력 조회를 허용하고 preprod 서비스 조회를 거부한다", async () => {
+    const history = (env) => `arn:aws:ecs:${region}:${account}:service-deployment/aws-fullstack-lab-${env}-cluster/web/example`;
+    const revision = (env) => `arn:aws:ecs:${region}:${account}:service-revision/aws-fullstack-lab-${env}-cluster/web/1`;
+    assert.equal(await decide(appRoles.prod, "ecs:DescribeServiceDeployments", history("prod")), "allowed");
+    assert.equal(await decide(appRoles.prod, "ecs:DescribeServiceRevisions", revision("prod")), "allowed");
+    assert.equal(await decide(appRoles.prod, "ecs:DescribeServiceDeployments", history("preprod")), "implicitDeny");
+    assert.equal(await decide(appRoles.preprod, "ecs:DescribeServiceDeployments", history("preprod")), "implicitDeny");
+  });
+
   test("앱 역할은 bootstrap state 읽기를 거부한다", async () => {
     for (const documents of Object.values(appRoles)) {
       assert.notEqual(await decide(documents, "s3:GetObject", `${bucket}/bootstrap/terraform.tfstate`), "allowed");

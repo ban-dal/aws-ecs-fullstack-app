@@ -95,7 +95,7 @@ scripts/check-github-settings.sh
 
 최초 전환 순서는 인프라 bootstrap IAM 적용 → 두 환경 루트 적용으로 ECR 정책 갱신 → 앱 저장소의 `preprod` 브랜치 생성·push다. prod 기반 리소스를 준비한 뒤 main에 반영하면 prod도 배포된다. 서비스가 중지돼 태스크 수가 기대값과 다르거나 이미 배포 중이면 앱 workflow는 변경하지 않고 실패한다. prod는 배포 완료 시 ALB 정상 대상이 서로 다른 EC2 두 대인지 검사하고 Actions 로그에 대상 ID와 포트를 남긴다. Terraform은 신규 생성용 task definition을 유지하지만 서비스의 활성 revision은 앱 workflow가 선택하므로, 기반 인프라 apply가 앱 버전을 되돌리지 않는다. 작업 중인 기반 apply와 앱 배포는 동시에 실행하지 않는다.
 
-앱 롤백은 앱 저장소에서 이전 코드를 새 commit으로 되돌려 해당 환경 workflow를 다시 실행한다. ECR은 최근 5개 이미지만 유지하므로 오래된 SHA의 재배포를 보장하지 않는다. preprod는 호스트 한 대의 고정 포트 때문에 교체 중 잠시 응답이 끊길 수 있다.
+prod는 배포 중 태스크 health가 실패하면 circuit breaker가, ALB 대상 5xx가 1분에 5건 이상이면 [`ecs-prod-web`](../infra/modules/ecs-prod-web/main.tf)의 alarm이 이전 revision으로 자동 롤백한다. 배포가 끝난 뒤의 prod 롤백은 앱 저장소의 `Rollback prod` workflow로 빌드 없이 한다. 대상 선택과 결함 주입 연습은 [앱 README](https://github.com/ban-dal/aws-ecs-fullstack-web#수동-롤백)를 본다. ECR은 최근 5개 이미지만 유지하므로 그보다 오래된 버전은 이전 코드를 새 commit으로 되돌려 배포한다. preprod는 호스트 한 대의 고정 포트 때문에 교체 중 잠시 응답이 끊길 수 있다.
 
 ### preprod 앱과 AWS Client VPN 접속
 

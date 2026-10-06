@@ -85,6 +85,18 @@ data "aws_iam_policy_document" "app" {
       resources = ["*"]
     }
   }
+  dynamic "statement" {
+    for_each = each.key == "prod" ? [1] : []
+    content {
+      # 앱 저장소의 prod 롤백 workflow가 직전 성공 배포의 이미지를 찾는다.
+      actions = ["ecs:ListServiceDeployments", "ecs:DescribeServiceDeployments", "ecs:DescribeServiceRevisions"]
+      resources = [
+        "arn:aws:ecs:${var.region}:${var.account_id}:service/aws-fullstack-lab-prod-cluster/web",
+        "arn:aws:ecs:${var.region}:${var.account_id}:service-deployment/aws-fullstack-lab-prod-cluster/web/*",
+        "arn:aws:ecs:${var.region}:${var.account_id}:service-revision/aws-fullstack-lab-prod-cluster/web/*",
+      ]
+    }
+  }
   statement {
     actions   = ["ecs:RegisterTaskDefinition", "ecs:TagResource"]
     resources = ["arn:aws:ecs:${var.region}:${var.account_id}:task-definition/aws-fullstack-lab-${each.key}-web:*"]
