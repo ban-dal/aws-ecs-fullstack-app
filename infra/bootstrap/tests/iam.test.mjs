@@ -37,6 +37,7 @@ async function roleDocuments(name) {
 const appRoles = Object.fromEntries(await Promise.all(["preprod", "prod"].map(async (environment) =>
   [environment, await roleDocuments(`aws-fullstack-lab-app-${environment}`)])));
 const executionRole = await roleDocuments("aws-fullstack-lab-ecs-task-execution");
+const infrastructureRole = await roleDocuments("aws-fullstack-lab-ecs-infrastructure");
 
 async function decide(documents, action, resource, context = {}) {
   const entries = Object.entries(context).map(([key, value]) => ({
@@ -109,6 +110,14 @@ describe("GitHub 역할", () => {
     assert.equal(await decide(appRoles.preprod, "elasticloadbalancing:DescribeTargetHealth", "*"), "implicitDeny");
   });
 
+  test("ECS 인프라 역할 전달은 prod 앱 역할이 ECS에 넘길 때만 허용하고 preprod 앱 역할과 다른 서비스는 거부한다", async () => {
+    const ecs = { "iam:PassedToService": "ecs.amazonaws.com" };
+    assert.equal(await decide(appRoles.prod, "iam:PassRole", role("ecs-infrastructure"), ecs), "allowed");
+    assert.equal(await decide(appRoles.prod, "iam:PassRole", role("ecs-infrastructure"), { "iam:PassedToService": "lambda.amazonaws.com" }), "implicitDeny");
+    assert.equal(await decide(appRoles.prod, "iam:PassRole", role("bootstrap-operator"), ecs), "implicitDeny");
+    assert.equal(await decide(appRoles.preprod, "iam:PassRole", role("ecs-infrastructure"), ecs), "implicitDeny");
+  });
+
   test("앱 역할은 bootstrap state 읽기를 거부한다", async () => {
     for (const documents of Object.values(appRoles)) {
       assert.notEqual(await decide(documents, "s3:GetObject", `${bucket}/bootstrap/terraform.tfstate`), "allowed");
@@ -128,6 +137,15 @@ describe("공통 IAM 경계", () => {
     const attachment = after["module.iam.aws_iam_role_policy_attachment.ecs_host_ssm"];
     assert.equal(attachment.role, "aws-fullstack-lab-ecs-host");
     assert.equal(attachment.policy_arn, "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore");
+  });
+
+  test("ECS 인프라 역할은 같은 계정의 ECS만 신뢰하고 리스너 규칙 변경을 허용하며 EC2 종료는 거부한다", async () => {
+    const trust = JSON.parse(after["module.iam.aws_iam_role.ecs_infrastructure"].assume_role_policy);
+    assert.deepEqual(trust.Statement.map(({ Principal }) => Principal.Service), ["ecs.amazonaws.com"]);
+    assert.equal(trust.Statement[0].Condition.StringEquals["aws:SourceAccount"], account);
+    const rule = `arn:aws:elasticloadbalancing:${region}:${account}:listener-rule/app/aws-fullstack-lab-prod-web/example/example/example`;
+    assert.equal(await decide(infrastructureRole, "elasticloadbalancing:ModifyRule", rule), "allowed");
+    assert.equal(await decide(infrastructureRole, "ec2:TerminateInstances", `arn:aws:ec2:${region}:${account}:instance/*`), "implicitDeny");
   });
 
   test("운영 역할 신뢰 정책은 사용자와 MFA를 요구한다", () => {

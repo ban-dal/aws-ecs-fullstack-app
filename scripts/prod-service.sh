@@ -8,7 +8,8 @@ region="${AWS_REGION:-ap-northeast-2}"
 cluster="aws-fullstack-lab-prod-cluster"
 autoscaling_group="aws-fullstack-lab-prod-ecs"
 load_balancer="aws-fullstack-lab-prod-web"
-target_group="aws-fullstack-lab-prod-web"
+# blue/green 배포가 두 대상 그룹을 번갈아 쓴다(modules/alb-web).
+target_groups=(aws-fullstack-lab-prod-web aws-fullstack-lab-prod-web-alt)
 
 [[ "$command" == check || "$command" == suspend ]] || {
   echo "usage: scripts/prod-service.sh check|suspend" >&2
@@ -25,9 +26,11 @@ if [[ "$command" == check ]]; then
     exit 1
   }
 
-  arn="$(aws elbv2 describe-target-groups --region "$region" --names "$target_group" \
-    --query 'TargetGroups[0].TargetGroupArn' --output text)"
-  targets="$(aws elbv2 describe-target-health --region "$region" --target-group-arn "$arn" --output json)"
+  arns="$(aws elbv2 describe-target-groups --region "$region" --names "${target_groups[@]}" \
+    --query 'TargetGroups[].TargetGroupArn' --output text)"
+  targets="$(for arn in $arns; do
+    aws elbv2 describe-target-health --region "$region" --target-group-arn "$arn" --output json
+  done | jq -s '{TargetHealthDescriptions: map(.TargetHealthDescriptions[])}')"
   if ! jq -e '
     [.TargetHealthDescriptions[] | select(.TargetHealth.State == "healthy") | .Target.Id] as $ids
     | ($ids | length) == 2 and ($ids | unique | length) == 2

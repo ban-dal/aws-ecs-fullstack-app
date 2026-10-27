@@ -14,6 +14,8 @@ locals {
 
   host_role_arn      = "arn:aws:iam::${var.account_id}:role/aws-fullstack-lab-ecs-host"
   execution_role_arn = "arn:aws:iam::${var.account_id}:role/aws-fullstack-lab-ecs-task-execution"
+  # modules/ecs-prod-web가 같은 이름으로 prod 서비스의 blue/green 설정에 쓴다.
+  infrastructure_role_arn = "arn:aws:iam::${var.account_id}:role/aws-fullstack-lab-ecs-infrastructure"
 }
 
 # OIDC subject는 앱 저장소의 immutable ID와 GitHub 환경 또는 배포 브랜치로 제한한다.
@@ -105,6 +107,19 @@ data "aws_iam_policy_document" "app" {
       test     = "StringEquals"
       variable = "iam:PassedToService"
       values   = ["ecs-tasks.amazonaws.com"]
+    }
+  }
+  dynamic "statement" {
+    for_each = each.key == "prod" ? [1] : []
+    content {
+      # blue/green 서비스의 UpdateService는 서비스에 설정된 인프라 역할을 ECS에 다시 넘긴다.
+      actions   = ["iam:PassRole"]
+      resources = [local.infrastructure_role_arn]
+      condition {
+        test     = "StringEquals"
+        variable = "iam:PassedToService"
+        values   = ["ecs.amazonaws.com"]
+      }
     }
   }
 }
@@ -263,4 +278,24 @@ resource "aws_iam_role_policy" "ecs_execution" {
   name   = "ecs-task-execution"
   role   = aws_iam_role.ecs_execution.name
   policy = data.aws_iam_policy_document.ecs_execution.json
+}
+
+# prod blue/green 배포에서 ECS가 리스너 규칙의 대상 그룹 가중치를 바꾸고 대상을 등록한다.
+resource "aws_iam_role" "ecs_infrastructure" {
+  name = "aws-fullstack-lab-ecs-infrastructure"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Action    = "sts:AssumeRole"
+      Principal = { Service = "ecs.amazonaws.com" }
+      Condition = { StringEquals = { "aws:SourceAccount" = var.account_id } }
+    }]
+  })
+  tags = { Project = "aws-fullstack-lab", Purpose = "ecs-infrastructure" }
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_infrastructure" {
+  role       = aws_iam_role.ecs_infrastructure.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonECSInfrastructureRolePolicyForLoadBalancers"
 }
