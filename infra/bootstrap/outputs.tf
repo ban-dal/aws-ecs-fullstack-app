@@ -1,10 +1,7 @@
 output "aws_account_id" { value = local.account_id }
 output "state_bucket" { value = module.s3_terraform_state.bucket }
-output "app_preprod_role_arn" { value = module.iam.app_preprod_role_arn }
-output "app_prod_role_arn" { value = module.iam.app_prod_role_arn }
 output "ecs_host_role_arn" { value = module.iam.ecs_host_role_arn }
 output "ecs_task_execution_role_arn" { value = module.iam.ecs_task_execution_role_arn }
-output "ecs_infrastructure_role_arn" { value = module.iam.ecs_infrastructure_role_arn }
 output "operator_role_arn" { value = module.iam.operator_role_arn }
 output "operator_user_arn" { value = module.iam.operator_user_arn }
 output "dns_zone_id" { value = module.route53_zone.zone_id }

@@ -37,3 +37,7 @@ output "ecs_cluster_name" {
 output "ecs_autoscaling_group_name" {
   value = module.ecs_host.autoscaling_group_name
 }
+
+output "app_deploy_role_arn" {
+  value = module.app_deploy.role_arn
+}

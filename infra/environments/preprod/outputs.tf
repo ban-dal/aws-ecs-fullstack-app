@@ -37,3 +37,7 @@ output "ecs_autoscaling_group_name" {
 output "client_vpn_endpoint_id" {
   value = module.client_vpn.endpoint_id
 }
+
+output "app_deploy_role_arn" {
+  value = module.app_deploy.role_arn
+}

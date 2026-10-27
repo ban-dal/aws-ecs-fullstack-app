@@ -1,4 +1,4 @@
-# bootstrap 루트: 계정 단위 기반과 IAM이다. PR merge 후 운영자가 scripts/infra.sh로 적용한다.
+# bootstrap 루트: 계정에 하나뿐인 기반과 IAM이다. 환경별 IAM은 환경 루트에 있다. PR merge 후 운영자가 scripts/infra.sh로 적용한다.
 locals {
   environments = toset(["preprod", "prod"])
   account_id   = var.expected_account_id
@@ -10,11 +10,10 @@ module "s3_terraform_state" {
 }
 
 module "iam" {
-  source                 = "../modules/iam"
-  account_id             = local.account_id
-  region                 = var.aws_region
-  environments           = local.environments
-  app_repository_subject = var.app_repository_subject
+  source       = "../modules/iam"
+  account_id   = local.account_id
+  region       = var.aws_region
+  environments = local.environments
 }
 
 module "budgets" {
