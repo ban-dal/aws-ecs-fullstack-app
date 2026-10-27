@@ -39,5 +39,5 @@ jobs:
       - name: Check script syntax
         run: |
           for script in scripts/*.sh; do bash -n "$script"; done
-          node --check infra/bootstrap/tests/*.test.mjs
+          for file in infra/tests/*.mjs; do node --check "$file"; done
           node --test scripts/tests/*.test.mjs

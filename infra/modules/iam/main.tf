@@ -1,137 +1,20 @@
-# 계정의 IAM 접근 경로를 한곳에서 관리한다. GitHub OIDC 역할은 앱 저장소 배포에만 쓴다.
-# 인프라는 사람이 MFA 운영 역할로 적용하므로 인프라 저장소에는 AWS 역할이 없다(scripts/infra.sh).
-# 앱 배포 역할은 각 환경의 ECR 저장소·ECS 서비스만 변경한다.
+# 계정에 하나뿐인 IAM을 관리한다: GitHub OIDC 제공자, 사람의 MFA 운영 역할, 두 환경이 공유하는
+# ECS 호스트·태스크 실행 역할. 환경별 앱 배포 역할(modules/iam-app-deploy)과 prod ECS 인프라
+# 역할(modules/ecs-prod-web)은 각 환경 루트가 서비스 리소스와 함께 관리한다.
 locals {
   repository_arns = [for environment in var.environments :
   "arn:aws:ecr:${var.region}:${var.account_id}:repository/aws-fullstack-lab-${environment}-web"]
   log_group_arns = [for environment in var.environments :
   "arn:aws:logs:${var.region}:${var.account_id}:log-group:aws-fullstack-lab-${environment}-*"]
 
-  github_subjects = {
-    app-preprod = ["${var.app_repository_subject}:ref:refs/heads/preprod"]
-    app-prod    = ["${var.app_repository_subject}:environment:prod-deploy"]
-  }
-
   host_role_arn      = "arn:aws:iam::${var.account_id}:role/aws-fullstack-lab-ecs-host"
   execution_role_arn = "arn:aws:iam::${var.account_id}:role/aws-fullstack-lab-ecs-task-execution"
-  # modules/ecs-prod-web가 같은 이름으로 prod 서비스의 blue/green 설정에 쓴다.
-  infrastructure_role_arn = "arn:aws:iam::${var.account_id}:role/aws-fullstack-lab-ecs-infrastructure"
 }
 
-# OIDC subject는 앱 저장소의 immutable ID와 GitHub 환경 또는 배포 브랜치로 제한한다.
+# 앱 저장소의 배포 역할(modules/iam-app-deploy)이 이 제공자를 신뢰한다.
 resource "aws_iam_openid_connect_provider" "github" {
   url            = "https://token.actions.githubusercontent.com"
   client_id_list = ["sts.amazonaws.com"]
-}
-
-data "aws_iam_policy_document" "github_assume" {
-  for_each = local.github_subjects
-
-  statement {
-    actions = ["sts:AssumeRoleWithWebIdentity"]
-    principals {
-      type        = "Federated"
-      identifiers = [aws_iam_openid_connect_provider.github.arn]
-    }
-    condition {
-      test     = "StringEquals"
-      variable = "token.actions.githubusercontent.com:aud"
-      values   = ["sts.amazonaws.com"]
-    }
-    condition {
-      test     = "StringEquals"
-      variable = "token.actions.githubusercontent.com:sub"
-      values   = each.value
-    }
-  }
-}
-
-resource "aws_iam_role" "github" {
-  for_each             = local.github_subjects
-  name                 = "aws-fullstack-lab-${each.key}"
-  assume_role_policy   = data.aws_iam_policy_document.github_assume[each.key].json
-  max_session_duration = 3600
-  tags                 = { Project = "aws-fullstack-lab", Purpose = each.key }
-}
-
-# 앱 저장소 역할은 환경별 저장소에 이미지를 올리고 해당 ECS 서비스만 갱신한다.
-# prod-deploy 환경은 앱 저장소에서 main 전용으로 설정한다.
-data "aws_iam_policy_document" "app" {
-  for_each = toset(["preprod", "prod"])
-
-  statement {
-    actions   = ["ecr:GetAuthorizationToken"]
-    resources = ["*"]
-  }
-  statement {
-    actions = [
-      "ecr:BatchCheckLayerAvailability", "ecr:BatchGetImage", "ecr:CompleteLayerUpload",
-      "ecr:DescribeImageScanFindings", "ecr:DescribeImages", "ecr:GetDownloadUrlForLayer",
-      "ecr:InitiateLayerUpload", "ecr:PutImage", "ecr:UploadLayerPart",
-    ]
-    resources = ["arn:aws:ecr:${var.region}:${var.account_id}:repository/aws-fullstack-lab-${each.key}-web"]
-  }
-  statement {
-    actions   = ["ecs:DescribeServices", "ecs:UpdateService"]
-    resources = ["arn:aws:ecs:${var.region}:${var.account_id}:service/aws-fullstack-lab-${each.key}-cluster/web"]
-  }
-  statement {
-    actions   = ["ecs:DescribeTaskDefinition"]
-    resources = ["*"]
-  }
-  dynamic "statement" {
-    for_each = each.key == "prod" ? [1] : []
-    content {
-      # DescribeTargetHealth는 리소스 ARN 범위 지정을 지원하지 않는다.
-      actions   = ["elasticloadbalancing:DescribeTargetHealth"]
-      resources = ["*"]
-    }
-  }
-  statement {
-    # 배포 workflow가 자동 롤백 원인을, prod 롤백 workflow가 직전 성공 배포의 이미지를 찾는다.
-    actions = ["ecs:ListServiceDeployments", "ecs:DescribeServiceDeployments", "ecs:DescribeServiceRevisions"]
-    resources = [
-      "arn:aws:ecs:${var.region}:${var.account_id}:service/aws-fullstack-lab-${each.key}-cluster/web",
-      "arn:aws:ecs:${var.region}:${var.account_id}:service-deployment/aws-fullstack-lab-${each.key}-cluster/web/*",
-      "arn:aws:ecs:${var.region}:${var.account_id}:service-revision/aws-fullstack-lab-${each.key}-cluster/web/*",
-    ]
-  }
-  statement {
-    actions   = ["ecs:RegisterTaskDefinition", "ecs:TagResource"]
-    resources = ["arn:aws:ecs:${var.region}:${var.account_id}:task-definition/aws-fullstack-lab-${each.key}-web:*"]
-  }
-  statement {
-    actions   = ["iam:PassRole"]
-    resources = [local.execution_role_arn]
-    condition {
-      test     = "StringEquals"
-      variable = "iam:PassedToService"
-      values   = ["ecs-tasks.amazonaws.com"]
-    }
-  }
-  dynamic "statement" {
-    for_each = each.key == "prod" ? [1] : []
-    content {
-      # blue/green 서비스의 UpdateService는 서비스에 설정된 인프라 역할을 ECS에 다시 넘긴다.
-      actions   = ["iam:PassRole"]
-      resources = [local.infrastructure_role_arn]
-      condition {
-        test     = "StringEquals"
-        variable = "iam:PassedToService"
-        values   = ["ecs.amazonaws.com"]
-      }
-    }
-  }
-}
-
-resource "aws_iam_role_policy" "github" {
-  for_each = local.github_subjects
-  name     = { app-preprod = "preprod-app-deploy", app-prod = "prod-app-deploy" }[each.key]
-  role     = aws_iam_role.github[each.key].name
-  policy = {
-    app-preprod = data.aws_iam_policy_document.app["preprod"].json
-    app-prod    = data.aws_iam_policy_document.app["prod"].json
-  }[each.key]
 }
 
 # 사람은 IAM 사용자로 로그인하고 MFA 세션으로 운영 역할 하나를 수임한다.
@@ -278,24 +161,4 @@ resource "aws_iam_role_policy" "ecs_execution" {
   name   = "ecs-task-execution"
   role   = aws_iam_role.ecs_execution.name
   policy = data.aws_iam_policy_document.ecs_execution.json
-}
-
-# prod blue/green 배포에서 ECS가 리스너 규칙의 대상 그룹 가중치를 바꾸고 대상을 등록한다.
-resource "aws_iam_role" "ecs_infrastructure" {
-  name = "aws-fullstack-lab-ecs-infrastructure"
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect    = "Allow"
-      Action    = "sts:AssumeRole"
-      Principal = { Service = "ecs.amazonaws.com" }
-      Condition = { StringEquals = { "aws:SourceAccount" = var.account_id } }
-    }]
-  })
-  tags = { Project = "aws-fullstack-lab", Purpose = "ecs-infrastructure" }
-}
-
-resource "aws_iam_role_policy_attachment" "ecs_infrastructure" {
-  role       = aws_iam_role.ecs_infrastructure.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonECSInfrastructureRolePolicyForLoadBalancers"
 }

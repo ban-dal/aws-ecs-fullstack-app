@@ -6,7 +6,7 @@
 
 | 대상 | 적용 주체 | 경로 |
 | --- | --- | --- |
-| 서비스 기반 (`infra/environments/<환경>`: VPC·ECR·preprod VPN 앱·prod HTTPS 앱) | 운영 역할 `aws-fullstack-lab-bootstrap-operator` | [2절](#2-인프라-적용)의 `scripts/infra.sh preprod`·`prod` |
+| 서비스 기반 (`infra/environments/<환경>`: 앱 배포 역할·VPC·ECR·preprod VPN 앱·prod HTTPS 앱) | 운영 역할 `aws-fullstack-lab-bootstrap-operator` | [2절](#2-인프라-적용)의 `scripts/infra.sh preprod`·`prod` |
 | 앱 이미지·ECS revision | 앱 저장소의 환경별 GitHub 배포 역할 | [앱 배포](#앱-배포)의 `Deploy app` |
 | bootstrap 전체 | 운영 역할 `aws-fullstack-lab-bootstrap-operator` | [2절](#2-인프라-적용)의 `scripts/infra.sh bootstrap` |
 | 콘솔 비밀번호, MFA 장치 | 사용자 본인 | IAM 콘솔 |
@@ -67,9 +67,9 @@ bootstrap·preprod·prod 세 루트를 모두 [운영 역할](#운영-역할-일
 PR merge 후:
 
 1. `main`을 최신으로 받고 [누가 무엇을 적용하나](#누가-무엇을-적용하나)에 따라 프로필을 고른다.
-2. 바뀐 루트마다 `scripts/infra.sh <루트> plan`을 실행한다. 저장 plan을 만들고 생성·수정·삭제 요약을 출력한다. bootstrap은 [정책 테스트](../infra/bootstrap/tests/iam.test.mjs)를 실행한다. 환경 루트는 모듈 안의 생성·수정과 prod 웹 태스크 정의의 컨테이너 변경에 따른 선생성 교체만 허용하고, 다른 삭제·교체가 있으면 저장 plan을 지우고 멈춘다([`scripts/tfplan.sh`](../scripts/tfplan.sh)). 요약이 PR에 적은 범위와 다르거나 검사가 실패하면 중단한다.
+2. 바뀐 루트마다 `scripts/infra.sh <루트> plan`을 실행한다. 저장 plan을 만들고 생성·수정·삭제 요약을 출력한다. 루트마다 [정책 테스트](../infra/tests/)를 실행한다. 환경 루트는 모듈 안의 생성·수정과 prod 웹 태스크 정의의 컨테이너 변경에 따른 선생성 교체만 허용하고, 다른 삭제·교체가 있으면 저장 plan을 지우고 멈춘다([`scripts/tfplan.sh`](../scripts/tfplan.sh)). 요약이 PR에 적은 범위와 다르거나 검사가 실패하면 중단한다.
 3. `scripts/infra.sh <루트> apply`로 같은 저장 plan을 적용한다. `main`이 `origin/main`과 같고, plan을 만든 commit과 같고, 커밋하지 않은 변경이 없을 때만 실행된다. 적용 후 plan이 변경 없음인지 확인하고 저장 plan을 지운다.
-4. IAM과 서비스 리소스가 함께 바뀌면 bootstrap을 먼저 적용한다. `prod`는 `preprod` 결과와 비용을 검토한 뒤 따로 결정한다. 운영 역할은 계정 관리자이므로 선택한 루트와 plan 요약을 적용 전에 확인한다.
+4. 공통 IAM([`modules/iam`](../infra/modules/iam/main.tf))과 환경 루트가 함께 바뀌면 bootstrap을 먼저 적용한다. 환경별 IAM은 환경 루트가 함께 적용한다. `prod`는 `preprod` 결과와 비용을 검토한 뒤 따로 결정한다. 운영 역할은 계정 관리자이므로 선택한 루트와 plan 요약을 적용 전에 확인한다.
 5. GitHub 설정 등 후속 작업이 PR에 적혀 있으면 곧바로 진행하고 `scripts/check-github-settings.sh`로 확인한다.
 6. 스크립트 출력(호출 주체, commit, 변경 요약, 사후 plan)을 해당 PR에 댓글로 남긴다.
 
@@ -93,7 +93,7 @@ scripts/check-github-settings.sh
 
 [앱 저장소](https://github.com/ban-dal/aws-ecs-fullstack-web)의 PR에서는 타입 검사·arm64 컨테이너 빌드와 health를 확인한다. `preprod` push는 preprod ECR·ECS에, `main` push는 prod ECR·ECS에 자동 배포한다. prod는 preprod에서 검증한 코드를 main에 반영해 배포한다. `prod-deploy` 환경은 main만 허용하고 사람의 승인은 요구하지 않는다. 이미지 태그는 환경별로 불변이며 해당 환경 역할만 push할 수 있다.
 
-최초 전환 순서는 인프라 bootstrap IAM 적용 → 두 환경 루트 적용으로 ECR 정책 갱신 → 앱 저장소의 `preprod` 브랜치 생성·push다. prod 기반 리소스를 준비한 뒤 main에 반영하면 prod도 배포된다. 서비스가 중지돼 태스크 수가 기대값과 다르거나 이미 배포 중이면 앱 workflow는 변경하지 않고 실패한다. prod는 배포 완료 시 ALB 정상 대상이 서로 다른 EC2 두 대인지 검사하고 Actions 로그에 대상 ID와 포트를 남긴다. Terraform은 신규 생성용 task definition을 유지하지만 서비스의 활성 revision은 앱 workflow가 선택하므로, 기반 인프라 apply가 앱 버전을 되돌리지 않는다. 작업 중인 기반 apply와 앱 배포는 동시에 실행하지 않는다.
+최초 전환 순서는 인프라 bootstrap 적용 → 두 환경 루트 적용으로 앱 배포 역할과 ECR 정책 생성 → 앱 저장소의 `preprod` 브랜치 생성·push다. prod 기반 리소스를 준비한 뒤 main에 반영하면 prod도 배포된다. 서비스가 중지돼 태스크 수가 기대값과 다르거나 이미 배포 중이면 앱 workflow는 변경하지 않고 실패한다. prod는 배포 완료 시 ALB 정상 대상이 서로 다른 EC2 두 대인지 검사하고 Actions 로그에 대상 ID와 포트를 남긴다. Terraform은 신규 생성용 task definition을 유지하지만 서비스의 활성 revision은 앱 workflow가 선택하므로, 기반 인프라 apply가 앱 버전을 되돌리지 않는다. 작업 중인 기반 apply와 앱 배포는 동시에 실행하지 않는다.
 
 prod는 blue/green으로 배포한다. 새 태스크 두 개를 대기 대상 그룹에 띄우고 트래픽을 한 번에 옮긴 뒤, 5분 bake time 동안 이전 태스크를 남겨 둔다. 그동안 호스트 한 대에 태스크가 두 개 놓인다. 배포 중 태스크 health가 실패하면 circuit breaker가, ALB 대상 5xx가 1분에 5건 이상이면 [`ecs-prod-web`](../infra/modules/ecs-prod-web/main.tf)의 alarm이 이전 revision으로 자동 롤백한다. 배포가 끝난 뒤의 prod 롤백은 앱 저장소의 `Rollback prod` workflow로 빌드 없이 한다. 대상 선택과 결함 주입 연습은 [앱 README](https://github.com/ban-dal/aws-ecs-fullstack-web#수동-롤백)를 본다. ECR은 최근 5개 이미지만 유지하므로 그보다 오래된 버전은 이전 코드를 새 commit으로 되돌려 배포한다. preprod는 호스트 한 대의 고정 포트 때문에 교체 중 잠시 응답이 끊길 수 있다.
 
@@ -147,7 +147,7 @@ prod는 blue/green으로 배포한다. 새 태스크 두 개를 대기 대상 �
 ## 5. 새 계정 재구성
 
 1. Terraform 1.14+, AWS CLI v2.32+를 준비한다. root MFA를 켜고 [1절](#root-예외)의 root 프로필을 만든다. Free plan 기간과 크레딧을 Billing에서 확인한다.
-2. `infra/bootstrap/terraform.tfvars.example`을 `terraform.tfvars`로 복사해 계정 ID, 전역에서 유일한 버킷 이름, 알림 이메일, 앱 저장소 GitHub OIDC subject를 넣는다. 앱 저장소가 이전·재생성되면 subject의 immutable ID를 다시 확인한다. 이메일이 `null`이면 Budget을 만들지 않는다.
+2. `infra/bootstrap/terraform.tfvars.example`을 `terraform.tfvars`로 복사해 계정 ID, 전역에서 유일한 버킷 이름, 알림 이메일을 넣는다. 앱 저장소가 이전·재생성되면 [`iam-app-deploy`](../infra/modules/iam-app-deploy/main.tf)의 GitHub OIDC subject(immutable ID)를 다시 확인한다. 이메일이 `null`이면 Budget을 만들지 않는다.
 3. state 버킷이 아직 없으므로 첫 apply는 Git에서 제외되는 local backend override로 한다. 계정에 GitHub OIDC 제공자가 이미 있으면 먼저 import한다.
 
    ```bash

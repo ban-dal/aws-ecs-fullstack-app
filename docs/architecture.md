@@ -62,10 +62,10 @@ prod 홈 화면과 `/api/backend`는 요청의 Host, `X-Forwarded-Proto`, `X-Amz
 
 ## 보안과 한계
 
-권한 정책이 무엇을 허용하고 거부해야 하는지는 [`infra/bootstrap/tests/`](../infra/bootstrap/tests/iam.test.mjs)의 테스트가 기준이다. bootstrap을 plan할 때마다 `scripts/infra.sh bootstrap plan`이 이 테스트를 실행한다.
+권한 정책이 무엇을 허용하고 거부해야 하는지는 [`infra/tests/`](../infra/tests/)의 테스트가 기준이다. `scripts/infra.sh <루트> plan`이 루트마다 해당 테스트를 실행한다.
 
 - **state 버킷** ([`s3-terraform-state`](../infra/modules/s3-terraform-state/main.tf)): 공개 접근 차단, HTTPS 강제, 암호화, 버전 관리.
-- **GitHub OIDC 역할** ([`iam`](../infra/modules/iam/main.tf)): 앱 저장소의 immutable subject만 신뢰한다. preprod·prod 역할은 각 ECR 저장소·ECS 서비스에만 쓰고, prod 역할은 앱 저장소의 main 전용 `prod-deploy` 환경만 신뢰한다. 인프라 저장소에는 AWS 역할이 없다. IAM을 포함한 루트를 GitHub가 적용하려면 계정 관리자에 준하는 역할을 GitHub에 줘야 하므로, 모든 루트를 사람이 적용한다.
+- **GitHub OIDC 역할** ([`iam-app-deploy`](../infra/modules/iam-app-deploy/main.tf)): 각 환경 루트가 관리하고, 앱 저장소의 immutable subject만 신뢰한다. preprod·prod 역할은 각 ECR 저장소·ECS 서비스에만 쓰고, prod 역할은 앱 저장소의 main 전용 `prod-deploy` 환경만 신뢰한다. 인프라 저장소에는 AWS 역할이 없다. IAM을 포함한 루트를 GitHub가 적용하려면 계정 관리자에 준하는 역할을 GitHub에 줘야 하므로, 모든 루트를 사람이 적용한다.
 - **적용 경로** ([`scripts/infra.sh`](../scripts/infra.sh), [`scripts/tfplan.sh`](../scripts/tfplan.sh)): bootstrap·preprod·prod를 같은 스크립트로 MFA 운영 역할 세션에서 적용한다. `main`이 `origin/main`과 같고 저장 plan을 만든 commit과 같을 때만 적용한다. 환경 루트는 모듈 안의 생성·수정과 prod 웹 태스크 정의의 컨테이너 변경에 따른 선생성 교체만 허용하고, 다른 삭제·교체는 막는다. destroy 경로는 아직 없다.
 - **환경 경계**: 두 환경의 Terraform 루트와 state key는 분리하지만 운영 역할은 계정 관리자다. 환경 간 IAM 격리나 IAM 비용 상한은 없고, 루트 선택과 plan 요약 확인이 경계다.
 - **ECS 역할** ([`iam`](../infra/modules/iam/main.tf)): 두 환경이 호스트 역할과 태스크 실행 역할을 공유한다. 앱 배포 역할은 태스크 실행 역할만 ECS 태스크에 넘길 수 있고, 태스크 실행 역할은 두 환경 저장소 pull과 로그 쓰기만 할 수 있다.

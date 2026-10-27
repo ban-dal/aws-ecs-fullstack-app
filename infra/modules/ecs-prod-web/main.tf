@@ -78,6 +78,26 @@ resource "aws_cloudwatch_metric_alarm" "target_5xx" {
   tags = var.tags
 }
 
+# blue/green 배포에서 ECS가 리스너 규칙의 대상 그룹 가중치를 바꾸고 대상을 등록한다.
+resource "aws_iam_role" "ecs_infrastructure" {
+  name = "aws-fullstack-lab-ecs-infrastructure"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Action    = "sts:AssumeRole"
+      Principal = { Service = "ecs.amazonaws.com" }
+      Condition = { StringEquals = { "aws:SourceAccount" = var.account_id } }
+    }]
+  })
+  tags = { Project = "aws-fullstack-lab", Purpose = "ecs-infrastructure" }
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_infrastructure" {
+  role       = aws_iam_role.ecs_infrastructure.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonECSInfrastructureRolePolicyForLoadBalancers"
+}
+
 # blue/green은 배포 중 기존 두 태스크 옆에 새 두 태스크를 띄우므로 호스트 한 대에 태스크가
 # 두 개 놓인다. 그래서 distinctInstance 대신 AZ spread로 나누고, 배포가 끝난 뒤 서로 다른
 # EC2 두 대에 있는지는 앱 배포 스크립트와 scripts/prod-service.sh check가 확인한다.
@@ -124,12 +144,13 @@ resource "aws_ecs_service" "web" {
     advanced_configuration {
       alternate_target_group_arn = var.alternate_target_group_arn
       production_listener_rule   = var.production_listener_rule_arn
-      # modules/iam의 ECS 인프라 역할이다. bootstrap을 먼저 적용한다.
-      role_arn = "arn:aws:iam::${var.account_id}:role/aws-fullstack-lab-ecs-infrastructure"
+      role_arn                   = aws_iam_role.ecs_infrastructure.arn
     }
   }
 
   tags = var.tags
+
+  depends_on = [aws_iam_role_policy_attachment.ecs_infrastructure]
 
   # 앱 저장소 workflow가 active revision을 바꾼다. 기반 apply에서 이를 되돌리지 않는다.
   lifecycle {

@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 # 로컬 MFA 운영 역할 세션에서 Terraform 루트 하나를 plan하고 apply한다.
 #
-# 모든 루트를 사람이 적용한다. bootstrap은 IAM 역할 자체를 만들므로 GitHub에 맡기면
-# GitHub 쪽에 계정 관리자 권한을 줘야 한다. 환경 루트도 같은 경로로 적용해 적용 절차를
-# 하나로 둔다. PR에는 `plan` 요약을 적고, merge 후 main에서 같은 루트를 다시 `plan`해
+# 모든 루트를 사람이 적용한다. 루트마다 IAM 역할을 만들므로 GitHub에 맡기면 GitHub 쪽에
+# 계정 관리자 권한을 줘야 한다. plan은 루트마다 IAM 정책 테스트를 실행한다. PR에는 `plan` 요약을 적고, merge 후 main에서 같은 루트를 다시 `plan`해
 # PR에 적은 범위와 비교한 뒤 그 저장 plan으로 `apply`한다.
 #
 #   scripts/infra.sh <bootstrap|preprod|prod> plan    # 모든 브랜치: 저장 plan, 변경 요약, 검사
@@ -71,9 +70,11 @@ plan() {
   echo "$target plan:"
   "$root/scripts/tfplan.sh" summary "$work/plan.json"
   if [[ "$target" == bootstrap ]]; then
-    PLAN_JSON="$work/plan.json" node --test --test-reporter=dot "$root"/infra/bootstrap/tests/*.test.mjs
+    PLAN_JSON="$work/plan.json" node --test --test-reporter=dot "$root/infra/tests/bootstrap.test.mjs"
   else
     "$root/scripts/tfplan.sh" check-foundation "$work/plan.json" || { rm -f "$work/tfplan"; exit 1; }
+    PLAN_JSON="$work/plan.json" ENVIRONMENT="$target" STATE_BUCKET="$state_bucket" \
+      node --test --test-reporter=dot "$root/infra/tests/environment.test.mjs" || { rm -f "$work/tfplan"; exit 1; }
   fi
   echo "saved plan: $work/tfplan (full output: $work/plan.log)"
 }

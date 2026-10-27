@@ -39,11 +39,23 @@ module "vpc_security_groups" {
   tags                = local.tags
 }
 
+# 앱 저장소의 main 전용 prod-deploy 환경만 이 역할을 수임한다.
+module "app_deploy" {
+  source = "../../modules/iam-app-deploy"
+
+  environment                 = local.environment
+  account_id                  = var.expected_account_id
+  region                      = var.aws_region
+  github_subject_suffix       = "environment:prod-deploy"
+  read_alb_target_health      = true
+  ecs_infrastructure_role_arn = module.web.ecs_infrastructure_role_arn
+}
+
 module "ecr_repository" {
   source = "../../modules/ecr-repository"
 
   name          = "${local.name_prefix}-web"
-  push_role_arn = "arn:aws:iam::${var.expected_account_id}:role/aws-fullstack-lab-app-prod"
+  push_role_arn = module.app_deploy.role_arn
   tags          = local.tags
 }
 

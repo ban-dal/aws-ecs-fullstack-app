@@ -6,8 +6,9 @@
 
 | 경로 | 용도 |
 | --- | --- |
-| `infra/bootstrap` | 계정·IAM 루트: state 버킷, 앱 GitHub OIDC 역할, 공통 ECS 역할, Budget, 운영 역할, ECR 스캔 |
-| `infra/environments/<환경>` | 환경별 VPC, ECR, ECS, preprod VPN, prod ALB·HTTPS |
+| `infra/bootstrap` | 계정에 하나뿐인 기반: state 버킷, GitHub OIDC 제공자, 공통 ECS 역할, Budget, 운영 역할, ECR 스캔 |
+| `infra/environments/<환경>` | 환경별 앱 배포 역할, VPC, ECR, ECS, preprod VPN, prod ALB·HTTPS |
+| `infra/tests` | 루트별 IAM 정책 테스트. `scripts/infra.sh <루트> plan`이 실행한다 |
 | `infra/modules` | AWS 서비스별 Terraform 모듈. 규칙은 [인프라 문서](infra/README.md) 참조 |
 | `.github/workflows/terraform.yml` | PR과 main 인프라 변경에서 fmt·validate·스크립트 정적 검사. AWS 자격 없음 |
 | `scripts/` | 루트별 plan·apply와 정책 검사, GitHub 설정 검사, 서비스 운영 |
