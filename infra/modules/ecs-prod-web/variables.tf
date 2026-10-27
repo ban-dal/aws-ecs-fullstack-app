@@ -30,7 +30,11 @@ variable "alb_arn_suffix" {
   type = string
 }
 
-variable "target_group_arn_suffix" {
+variable "alternate_target_group_arn" {
+  type = string
+}
+
+variable "production_listener_rule_arn" {
   type = string
 }
 

@@ -52,7 +52,7 @@ flowchart LR
   AppMain --> ProdDeploy[main push로 prod 이미지 빌드·ECS 자동 배포]
 ```
 
-두 저장소는 [인프라](https://github.com/ban-dal/aws-ecs-fullstack-app)와 [앱](https://github.com/ban-dal/aws-ecs-fullstack-web)으로 나뉜다. 앱 workflow는 환경별 commit SHA 이미지를 별도 ECR에 올리고 ECS의 활성 task definition revision을 갱신한다. Terraform의 `image_tag`는 신규 서비스 생성 시의 seed이며 이후 앱 배포 버전은 앱 workflow가 관리한다. preprod는 Client VPN에서 호스트 사설 IP의 고정 앱 포트로만 들어오고, prod는 bridge 네트워크의 동적 호스트 포트를 쓴다. prod ALB 대상 그룹은 instance 유형이고 prod EC2 보안 그룹은 ALB 보안 그룹에서 오는 임시 포트만 연다.
+두 저장소는 [인프라](https://github.com/ban-dal/aws-ecs-fullstack-app)와 [앱](https://github.com/ban-dal/aws-ecs-fullstack-web)으로 나뉜다. 앱 workflow는 환경별 commit SHA 이미지를 별도 ECR에 올리고 ECS의 활성 task definition revision을 갱신한다. Terraform의 `image_tag`는 신규 서비스 생성 시의 seed이며 이후 앱 배포 버전은 앱 workflow가 관리한다. preprod는 Client VPN에서 호스트 사설 IP의 고정 앱 포트로만 들어오고, prod는 bridge 네트워크의 동적 호스트 포트를 쓴다. prod는 ECS blue/green으로 배포한다. instance 유형 대상 그룹 두 개를 번갈아 쓰고, ECS가 HTTPS 리스너 규칙의 가중치로 트래픽을 한 번에 옮긴다. prod EC2 보안 그룹은 ALB 보안 그룹에서 오는 임시 포트만 연다.
 
 ## 요청 경로 관측
 

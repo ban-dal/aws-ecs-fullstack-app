@@ -11,11 +11,15 @@ output "arn_suffix" {
 }
 
 output "target_group_arn" {
-  value = aws_lb_target_group.web.arn
+  value = aws_lb_target_group.web["primary"].arn
 }
 
-output "target_group_arn_suffix" {
-  value = aws_lb_target_group.web.arn_suffix
+output "alternate_target_group_arn" {
+  value = aws_lb_target_group.web["alternate"].arn
+}
+
+output "production_listener_rule_arn" {
+  value = aws_lb_listener_rule.web.arn
 }
 
 output "https_listener_arn" {
